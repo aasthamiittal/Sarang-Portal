@@ -58,15 +58,15 @@ const Dashboard = () => {
 
   const OrderSummaryCard = ({ title, value, link, color }) => (
     <Link to={link}>
-      <div className={`bg-white p-6 rounded-lg shadow-md border-l-4 ${color} hover:shadow-lg transition-shadow cursor-pointer`}>
-        <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
+      <div className={`bg-white p-6 rounded-lg shadow-md border-l-4 ${color} hover:shadow-lg transition-shadow cursor-pointer h-28`}>
+        <h3 className="text-sm font-semibold text-gray-700 whitespace-normal">{title}</h3>
         <p className="text-3xl font-bold text-gray-900">{value}</p>
       </div>
     </Link>
   );
 
   const ActionCard = ({ title, value, icon, color }) => (
-    <div className={`bg-white p-4 rounded-lg shadow-md border-l-4 ${color}`}>
+    <div className={`bg-white p-4 rounded-lg shadow-md border-l-4 ${color} h-20`}>
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
@@ -83,7 +83,7 @@ const Dashboard = () => {
         <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
         
         {/* Date Filters */}
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           {['today', 'yesterday', 'last7days', 'last30days', 'custom'].map((filter) => (
             <button
               key={filter}
@@ -115,31 +115,31 @@ const Dashboard = () => {
           title="Drafted Orders"
           value={orderSummary.draftedOrders}
           link="/shipments?status=draft"
-          color="border-gray-500"
+          color="border-blue-500"
         />
         <OrderSummaryCard
           title="Pending for Label"
           value={orderSummary.pendingForLabel}
           link="/shipments?status=pending-label"
-          color="border-yellow-500"
+          color="border-blue-500"
         />
         <OrderSummaryCard
           title="Packed Orders"
           value={orderSummary.packedOrders}
           link="/shipments?status=packed"
-          color="border-green-500"
+          color="border-blue-500"
         />
         <OrderSummaryCard
           title="Dispatched Orders"
           value={orderSummary.dispatchedOrders}
           link="/shipments?status=dispatched"
-          color="border-purple-500"
+          color="border-blue-500"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Actions Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Actions</h2>
           <div className="space-y-4">
             <ActionCard
@@ -152,19 +152,19 @@ const Dashboard = () => {
               title="Open Manifests"
               value={actionsSummary.openManifests}
               icon="📋"
-              color="border-green-500"
+              color="border-blue-500"
             />
             <ActionCard
               title="Disputed Orders"
               value={actionsSummary.disputedOrders}
               icon="⚠️"
-              color="border-red-500"
+              color="border-blue-500"
             />
           </div>
         </div>
 
         {/* Wallet Activity */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">Wallet</h2>
             <span className="text-2xl font-bold text-green-600">${walletBalance.toFixed(2)}</span>
@@ -186,16 +186,16 @@ const Dashboard = () => {
         </div>
 
         {/* Placeholder for additional content */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">Quick Actions</h2>
           <div className="space-y-2">
             <Link to="/shipments" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
               Create New Order
             </Link>
-            <Link to="/rate-comparison" className="block w-full bg-green-600 text-white py-2 px-4 rounded-lg text-center hover:bg-green-700 transition-colors">
+            <Link to="/rate-comparison" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
               Calculate Rates
             </Link>
-            <Link to="/pickup" className="block w-full bg-purple-600 text-white py-2 px-4 rounded-lg text-center hover:bg-purple-700 transition-colors">
+            <Link to="/pickup" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
               Request Pickup
             </Link>
           </div>

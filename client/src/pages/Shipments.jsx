@@ -239,7 +239,7 @@ const Shipments = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outlined" startIcon={<GetApp />} onClick={handleExport}>
             Export CSV
           </Button>
@@ -430,19 +430,19 @@ const Shipments = () => {
               <div>
                 <Typography variant="h6" gutterBottom>Customer Information</Typography>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Name</Typography>
                     <Typography>{selectedShipment.customerInfo?.name || 'N/A'}</Typography>
                   </div>
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Email</Typography>
                     <Typography>{selectedShipment.customerInfo?.email || 'N/A'}</Typography>
                   </div>
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Phone</Typography>
                     <Typography>{selectedShipment.customerInfo?.phone || 'N/A'}</Typography>
                   </div>
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Address</Typography>
                     <Typography>{selectedShipment.customerInfo?.address || 'N/A'}</Typography>
                   </div>
@@ -454,18 +454,19 @@ const Shipments = () => {
               <div>
                 <Typography variant="h6" gutterBottom>Product Information</Typography>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Description</Typography>
                     <Typography>{selectedShipment.productInfo?.description || 'N/A'}</Typography>
                   </div>
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Quantity</Typography>
                     <Typography>{selectedShipment.productInfo?.quantity || 'N/A'}</Typography>
                   </div>
-                  <div>
+                  <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Value</Typography>
                     <Typography>${selectedShipment.productInfo?.value || 'N/A'}</Typography>
                   </div>
+                  <div className="min-h-16"></div>
                 </div>
               </div>
 

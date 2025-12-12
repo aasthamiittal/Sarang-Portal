@@ -47,7 +47,7 @@ const columns = [
     headerName: 'Actions',
     width: 200,
     renderCell: (params) => (
-      <div className="flex space-x-1">
+      <div className="flex flex-wrap gap-1">
         <Button size="small" startIcon={<Edit />} onClick={() => params.api.handleEditRole(params.row)}>Edit Role</Button>
         <Button
           size="small"
@@ -163,7 +163,7 @@ const Admin = () => {
               rows={users}
               getRowId={(row) => row._id}
               columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
-                <div className="flex space-x-1">
+                <div className="flex flex-wrap gap-1">
                   <Button size="small" startIcon={<Edit />} onClick={() => handleEditRole(params.row)}>Edit Role</Button>
                   <Button
                     size="small"

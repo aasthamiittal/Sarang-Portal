@@ -84,7 +84,7 @@ const Billing = () => {
         <CardContent>
           <div className="flex justify-between items-center mb-4">
             <Typography variant="h6">Transaction History</Typography>
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               {['all', 'credit', 'debit'].map((type) => (
                 <Button
                   key={type}
