@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider } from '@mui/material';
+import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider, useMediaQuery } from '@mui/material';
 import { Add, Edit, Delete, Timeline, CloudUpload, Search, FilterList, Print, GetApp, Visibility, Assignment } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
@@ -21,12 +21,12 @@ const getStatusColor = (status) => {
 };
 
 const columns = [
-  { field: 'orderId', headerName: 'Order ID', minWidth: 100 },
-  { field: 'trackingNumber', headerName: 'Tracking Number', minWidth: 150 },
+  { field: 'orderId', headerName: 'Order ID', width: 100, renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
+  { field: 'trackingNumber', headerName: 'Tracking Number', width: 150, renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
   {
     field: 'status',
     headerName: 'Order Status',
-    minWidth: 110,
+    width: 110,
     renderCell: (params) => (
       <Chip
         label={params.value.replace('-', ' ').toUpperCase()}
@@ -35,15 +35,15 @@ const columns = [
       />
     ),
   },
-  { field: 'pickupDate', headerName: 'Pickup Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'dispatchDate', headerName: 'Dispatch Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'deliveryDate', headerName: 'Delivery Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'weight', headerName: 'Weight (kg)', minWidth: 80, type: 'number' },
-  { field: 'cost', headerName: 'Cost ($)', minWidth: 80, type: 'number' },
+  { field: 'pickupDate', headerName: 'Pickup Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
+  { field: 'dispatchDate', headerName: 'Dispatch Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
+  { field: 'deliveryDate', headerName: 'Delivery Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
+  { field: 'weight', headerName: 'Weight (kg)', width: 80, type: 'number', renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
+  { field: 'cost', headerName: 'Cost ($)', width: 80, type: 'number', renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
   {
     field: 'actions',
     headerName: 'Actions',
-    minWidth: 160,
+    width: 160,
     renderCell: (params) => (
       <div className="flex space-x-1">
         <IconButton size="small" onClick={() => params.api.handleViewDetails(params.row)} title="View Details">
@@ -68,6 +68,7 @@ const columns = [
 
 const Shipments = () => {
   const { token } = useAuth();
+  const isSmall = useMediaQuery('(max-width:768px)');
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -236,7 +237,7 @@ const Shipments = () => {
   };
 
   return (
-    <div>
+    <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
         <div className="flex flex-wrap gap-2">
@@ -357,7 +358,7 @@ const Shipments = () => {
         </CardContent>
       </Card>
 
-      <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+      <div className="bg-white rounded-lg shadow-md  overflow-x-auto">
         <div style={{ height: 500, width: '100%' }}>
           <DataGrid
             rows={shipments}
@@ -390,7 +391,11 @@ const Shipments = () => {
             rowCount={total}
             loading={loading}
             disableSelectionOnClick
-            autoWidth
+            initialState={{
+              columns: {
+                columnVisibilityModel: isSmall ? { dispatchDate: false, deliveryDate: false, weight: false, cost: false } : {}
+              }
+            }}
           />
         </div>
       </div>

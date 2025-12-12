@@ -30,7 +30,7 @@ const Layout = () => {
             ☰
           </button>
         </header>
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 lg:ml-64">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/shipments" element={<Shipments />} />
