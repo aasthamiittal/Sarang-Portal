@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent } from '@mui/material';
-import { Add, Edit, Delete, Timeline, CloudUpload, Search, FilterList } from '@mui/icons-material';
+import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider } from '@mui/material';
+import { Add, Edit, Delete, Timeline, CloudUpload, Search, FilterList, Print, GetApp, Visibility, Assignment } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import ShipmentForm from './ShipmentForm';
@@ -9,7 +9,10 @@ import ShipmentTimeline from '../components/Timeline';
 
 const getStatusColor = (status) => {
   switch (status) {
-    case 'pending': return 'warning';
+    case 'draft': return 'default';
+    case 'pending-label': return 'warning';
+    case 'packed': return 'info';
+    case 'dispatched': return 'primary';
     case 'in-transit': return 'info';
     case 'delivered': return 'success';
     case 'cancelled': return 'error';
@@ -18,11 +21,12 @@ const getStatusColor = (status) => {
 };
 
 const columns = [
+  { field: 'orderId', headerName: 'Order ID', width: 120 },
   { field: 'trackingNumber', headerName: 'Tracking Number', width: 180 },
   {
     field: 'status',
-    headerName: 'Status',
-    width: 120,
+    headerName: 'Order Status',
+    width: 130,
     renderCell: (params) => (
       <Chip
         label={params.value.replace('-', ' ').toUpperCase()}
@@ -31,18 +35,32 @@ const columns = [
       />
     ),
   },
-  { field: 'origin', headerName: 'Origin', width: 120 },
-  { field: 'destination', headerName: 'Destination', width: 120 },
+  { field: 'pickupDate', headerName: 'Pickup Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'dispatchDate', headerName: 'Dispatch Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'deliveryDate', headerName: 'Delivery Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'weight', headerName: 'Weight (kg)', width: 100, type: 'number' },
   { field: 'cost', headerName: 'Cost ($)', width: 100, type: 'number' },
   {
     field: 'actions',
     headerName: 'Actions',
-    width: 150,
+    width: 200,
     renderCell: (params) => (
       <div className="flex space-x-1">
-        <Button size="small" startIcon={<Timeline />} onClick={() => params.api.handleViewTimeline(params.row)}>Timeline</Button>
-        <Button size="small" startIcon={<Edit />} onClick={() => params.api.handleEdit(params.row)}>Edit</Button>
-        <Button size="small" color="error" startIcon={<Delete />} onClick={() => params.api.handleDelete(params.row.id)}>Delete</Button>
+        <IconButton size="small" onClick={() => params.api.handleViewDetails(params.row)} title="View Details">
+          <Visibility />
+        </IconButton>
+        <IconButton size="small" onClick={() => params.api.handlePrintLabel(params.row)} title="Print Label">
+          <Print />
+        </IconButton>
+        <IconButton size="small" onClick={() => params.api.handleViewTimeline(params.row)} title="Timeline">
+          <Timeline />
+        </IconButton>
+        <IconButton size="small" onClick={() => params.api.handleEdit(params.row)} title="Edit">
+          <Edit />
+        </IconButton>
+        <IconButton size="small" color="error" onClick={() => params.api.handleDelete(params.row.id)} title="Delete">
+          <Delete />
+        </IconButton>
       </div>
     ),
   },
@@ -59,6 +77,7 @@ const Shipments = () => {
     search: '',
     status: '',
     carrier: '',
+    paymentStatus: '',
     origin: '',
     destination: '',
     startDate: '',
@@ -66,6 +85,7 @@ const Shipments = () => {
   });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [timelineDialogOpen, setTimelineDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedShipment, setSelectedShipment] = useState(null);
@@ -114,6 +134,50 @@ const Shipments = () => {
   const handleViewTimeline = (shipment) => {
     setSelectedShipment(shipment);
     setTimelineDialogOpen(true);
+  };
+
+  const handleViewDetails = (shipment) => {
+    setSelectedShipment(shipment);
+    setDetailsDialogOpen(true);
+  };
+
+  const handlePrintLabel = async (shipment) => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/shipments/${shipment._id}/label`, {
+        headers,
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `label-${shipment.trackingNumber}.txt`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Failed to download label:', error);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams(filters);
+      const response = await axios.get(`http://localhost:5000/api/shipments/export?${params}`, {
+        headers,
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'shipments.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Failed to export shipments:', error);
+    }
   };
 
   const handleBulkUpload = () => {
@@ -174,13 +238,16 @@ const Shipments = () => {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Shipments</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
         <div className="flex space-x-2">
+          <Button variant="outlined" startIcon={<GetApp />} onClick={handleExport}>
+            Export CSV
+          </Button>
           <Button variant="outlined" startIcon={<CloudUpload />} onClick={handleBulkUpload}>
             Bulk Upload
           </Button>
           <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleAdd}>
-            Add Shipment
+            Create New Order
           </Button>
         </div>
       </div>
@@ -189,7 +256,7 @@ const Shipments = () => {
       <Card className="mb-6">
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
                 label="Search"
@@ -200,7 +267,7 @@ const Shipments = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <TextField
                 select
                 fullWidth
@@ -209,13 +276,30 @@ const Shipments = () => {
                 onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               >
                 <MenuItem value="">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="draft">Draft</MenuItem>
+                <MenuItem value="pending-label">Pending Label</MenuItem>
+                <MenuItem value="packed">Packed</MenuItem>
+                <MenuItem value="dispatched">Dispatched</MenuItem>
                 <MenuItem value="in-transit">In Transit</MenuItem>
                 <MenuItem value="delivered">Delivered</MenuItem>
                 <MenuItem value="cancelled">Cancelled</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                select
+                fullWidth
+                label="Payment Status"
+                value={filters.paymentStatus}
+                onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="paid">Paid</MenuItem>
+                <MenuItem value="failed">Failed</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2 }}>
               <TextField
                 fullWidth
                 label="Carrier"
@@ -223,7 +307,7 @@ const Shipments = () => {
                 onChange={(e) => setFilters({ ...filters, carrier: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <TextField
                 fullWidth
                 label="Origin"
@@ -231,7 +315,7 @@ const Shipments = () => {
                 onChange={(e) => setFilters({ ...filters, origin: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
                 type="date"
@@ -241,7 +325,7 @@ const Shipments = () => {
                 onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
                 type="date"
@@ -251,7 +335,7 @@ const Shipments = () => {
                 onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={1}>
+            <Grid size={{ xs: 12, md: 1 }}>
               <Button
                 variant="outlined"
                 startIcon={<FilterList />}
@@ -259,6 +343,7 @@ const Shipments = () => {
                   search: '',
                   status: '',
                   carrier: '',
+                  paymentStatus: '',
                   origin: '',
                   destination: '',
                   startDate: '',
@@ -279,9 +364,21 @@ const Shipments = () => {
             getRowId={(row) => row._id}
             columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
               <div className="flex space-x-1">
-                <Button size="small" startIcon={<Timeline />} onClick={() => handleViewTimeline(params.row)}>Timeline</Button>
-                <Button size="small" startIcon={<Edit />} onClick={() => handleEdit(params.row)}>Edit</Button>
-                <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(params.row._id)}>Delete</Button>
+                <IconButton size="small" onClick={() => handleViewDetails(params.row)} title="View Details">
+                  <Visibility />
+                </IconButton>
+                <IconButton size="small" onClick={() => handlePrintLabel(params.row)} title="Print Label">
+                  <Print />
+                </IconButton>
+                <IconButton size="small" onClick={() => handleViewTimeline(params.row)} title="Timeline">
+                  <Timeline />
+                </IconButton>
+                <IconButton size="small" onClick={() => handleEdit(params.row)} title="Edit">
+                  <Edit />
+                </IconButton>
+                <IconButton size="small" color="error" onClick={() => handleDelete(params.row._id)} title="Delete">
+                  <Delete />
+                </IconButton>
               </div>
             )} : col)}
             page={page - 1}
@@ -309,7 +406,7 @@ const Shipments = () => {
         </DialogContent>
       </Dialog>
       <Dialog open={bulkDialogOpen} onClose={() => setBulkDialogOpen(false)}>
-        <DialogTitle>Bulk Upload Shipments</DialogTitle>
+        <DialogTitle>Bulk Upload Orders</DialogTitle>
         <DialogContent>
           <p>Upload a CSV file with columns: origin, destination, carrier, weight, status (optional)</p>
           <input
@@ -322,6 +419,74 @@ const Shipments = () => {
         <DialogActions>
           <Button onClick={() => setBulkDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleFileSubmit} variant="contained">Upload</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={detailsDialogOpen} onClose={() => setDetailsDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Order Details - {selectedShipment?.orderId}</DialogTitle>
+        <DialogContent>
+          {selectedShipment && (
+            <div className="space-y-6">
+              <div>
+                <Typography variant="h6" gutterBottom>Customer Information</Typography>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Name</Typography>
+                    <Typography>{selectedShipment.customerInfo?.name || 'N/A'}</Typography>
+                  </div>
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Email</Typography>
+                    <Typography>{selectedShipment.customerInfo?.email || 'N/A'}</Typography>
+                  </div>
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Phone</Typography>
+                    <Typography>{selectedShipment.customerInfo?.phone || 'N/A'}</Typography>
+                  </div>
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Address</Typography>
+                    <Typography>{selectedShipment.customerInfo?.address || 'N/A'}</Typography>
+                  </div>
+                </div>
+              </div>
+
+              <Divider />
+
+              <div>
+                <Typography variant="h6" gutterBottom>Product Information</Typography>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Description</Typography>
+                    <Typography>{selectedShipment.productInfo?.description || 'N/A'}</Typography>
+                  </div>
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Quantity</Typography>
+                    <Typography>{selectedShipment.productInfo?.quantity || 'N/A'}</Typography>
+                  </div>
+                  <div>
+                    <Typography variant="body2" color="text.secondary">Value</Typography>
+                    <Typography>${selectedShipment.productInfo?.value || 'N/A'}</Typography>
+                  </div>
+                </div>
+              </div>
+
+              <Divider />
+
+              <div>
+                <Typography variant="h6" gutterBottom>Shipment Timeline</Typography>
+                <ShipmentTimeline statusHistory={selectedShipment.statusHistory} />
+              </div>
+
+              <Divider />
+
+              <div>
+                <Typography variant="h6" gutterBottom>Order Notes</Typography>
+                <Typography>{selectedShipment.orderNotes || 'No notes available'}</Typography>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </div>

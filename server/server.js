@@ -32,6 +32,12 @@ const billingRoutes = require('./routes/billing');
 const reportRoutes = require('./routes/reports');
 const carrierRoutes = require('./routes/carriers');
 const rateRoutes = require('./routes/rates');
+const multiBoxRoutes = require('./routes/multi-box');
+const pickupRoutes = require('./routes/pickup');
+const documentsRoutes = require('./routes/documents');
+const integrationsRoutes = require('./routes/integrations');
+const quotesRoutes = require('./routes/quotes');
+const walletRoutes = require('./routes/wallet');
 
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/manifests', manifestRoutes);
@@ -39,6 +45,12 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/carriers', carrierRoutes);
 app.use('/api/rates', rateRoutes);
+app.use('/api/multi-box', multiBoxRoutes);
+app.use('/api/pickup', pickupRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/integration', integrationsRoutes);
+app.use('/api/quotes', quotesRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 5000;

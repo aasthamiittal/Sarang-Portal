@@ -1,143 +1,160 @@
 import React, { useState, useEffect } from 'react';
-import { DataGrid } from '@mui/x-data-grid';
-import { Button, Chip, Card, CardContent } from '@mui/material';
-import { Payment, Cancel } from '@mui/icons-material';
+import { Button, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip } from '@mui/material';
+import { AccountBalanceWallet, Add, CreditCard } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'pending': return 'warning';
-    case 'paid': return 'success';
-    case 'cancelled': return 'error';
-    default: return 'default';
-  }
-};
-
-const columns = [
-  { field: 'tracking', headerName: 'Shipment Tracking', width: 180 },
-  { field: 'amount', headerName: 'Amount ($)', width: 120, type: 'number' },
-  {
-    field: 'status',
-    headerName: 'Status',
-    width: 120,
-    renderCell: (params) => (
-      <Chip
-        label={params.value.charAt(0).toUpperCase() + params.value.slice(1)}
-        color={getStatusColor(params.value)}
-        size="small"
-      />
-    ),
-  },
-  { field: 'paidAt', headerName: 'Paid At', width: 180, valueFormatter: (value) => value ? new Date(value).toLocaleString() : 'N/A' },
-  {
-    field: 'actions',
-    headerName: 'Actions',
-    width: 200,
-    renderCell: (params) => (
-      <div className="flex space-x-1">
-        <Button
-          size="small"
-          startIcon={<Payment />}
-          disabled={params.row.status === 'paid'}
-          onClick={() => params.api.handlePay(params.row.id)}
-        >
-          Mark Paid
-        </Button>
-        <Button
-          size="small"
-          color="error"
-          startIcon={<Cancel />}
-          disabled={params.row.status === 'paid'}
-          onClick={() => params.api.handleCancel(params.row.id)}
-        >
-          Cancel
-        </Button>
-      </div>
-    ),
-  },
-];
-
 const Billing = () => {
   const { token } = useAuth();
-  const [billings, setBillings] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletActivity, setWalletActivity] = useState([]);
+  const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [filter, setFilter] = useState('all');
 
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
-    fetchBillings();
+    fetchWalletData();
   }, [token]);
 
-  const fetchBillings = async () => {
-    setLoading(true);
+  const fetchWalletData = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/billing', { headers });
-      setBillings(response.data);
+      const [balanceRes, activityRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/wallet/balance', { headers }),
+        axios.get('http://localhost:5000/api/wallet/history', { headers })
+      ]);
+      setWalletBalance(balanceRes.data.balance);
+      setWalletActivity(activityRes.data);
     } catch (error) {
-      console.error('Failed to fetch billings:', error);
-    }
-    setLoading(false);
-  };
-
-  const handlePay = async (id) => {
-    try {
-      await axios.put(`http://localhost:5000/api/billing/${id}`, { status: 'paid', paidAt: new Date() }, { headers });
-      fetchBillings();
-    } catch (error) {
-      console.error('Failed to mark as paid:', error);
+      console.error('Failed to fetch wallet data:', error);
     }
   };
 
-  const handleCancel = async (id) => {
-    if (window.confirm('Are you sure you want to cancel this billing?')) {
-      try {
-        await axios.put(`http://localhost:5000/api/billing/${id}`, { action: 'cancel' }, { headers });
-        fetchBillings();
-      } catch (error) {
-        console.error('Failed to cancel billing:', error);
-      }
+  const handleRecharge = async () => {
+    if (!rechargeAmount || parseFloat(rechargeAmount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      await axios.post('http://localhost:5000/api/wallet/recharge', { amount: rechargeAmount }, { headers });
+      setRechargeDialogOpen(false);
+      setRechargeAmount('');
+      fetchWalletData();
+      alert('Recharge successful!');
+    } catch (error) {
+      console.error('Failed to recharge:', error);
+      alert('Recharge failed. Please try again.');
     }
   };
+
+  const filteredActivity = walletActivity.filter(activity => {
+    if (filter === 'all') return true;
+    return activity.type === filter;
+  });
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Billing</h1>
-      <Card>
-        <CardContent>
-          <div style={{ height: 500, width: '100%' }}>
-            <DataGrid
-              rows={billings}
-              getRowId={(row) => row._id}
-              columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
-                <div className="flex space-x-1">
-                  <Button
-                    size="small"
-                    startIcon={<Payment />}
-                    disabled={params.row.status === 'paid'}
-                    onClick={() => handlePay(params.row._id)}
-                  >
-                    Mark Paid
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<Cancel />}
-                    disabled={params.row.status === 'paid'}
-                    onClick={() => handleCancel(params.row._id)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              )} : col)}
-              pageSize={10}
-              rowsPerPageOptions={[5, 10, 25]}
-              loading={loading}
-              disableSelectionOnClick
-            />
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Wallet</h1>
+
+      {/* Wallet Balance Card */}
+      <Card className="mb-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+        <CardContent className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <AccountBalanceWallet fontSize="large" />
+            <div>
+              <Typography variant="h6">Wallet Balance</Typography>
+              <Typography variant="h4" className="font-bold">${walletBalance.toFixed(2)}</Typography>
+            </div>
           </div>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setRechargeDialogOpen(true)}
+            className="bg-white text-blue-600 hover:bg-gray-100"
+          >
+            Recharge
+          </Button>
         </CardContent>
       </Card>
+
+      {/* Transaction History */}
+      <Card>
+        <CardContent>
+          <div className="flex justify-between items-center mb-4">
+            <Typography variant="h6">Transaction History</Typography>
+            <div className="flex space-x-2">
+              {['all', 'credit', 'debit'].map((type) => (
+                <Button
+                  key={type}
+                  variant={filter === type ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => setFilter(type)}
+                >
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Description</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Amount</TableCell>
+                  <TableCell>Date</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredActivity.map((activity, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{activity.description}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={activity.type}
+                        color={activity.type === 'credit' ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell className={activity.type === 'credit' ? 'text-green-600' : 'text-red-600'}>
+                      {activity.type === 'credit' ? '+' : '-'}${activity.amount}
+                    </TableCell>
+                    <TableCell>{new Date(activity.date).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Recharge Dialog */}
+      <Dialog open={rechargeDialogOpen} onClose={() => setRechargeDialogOpen(false)}>
+        <DialogTitle>Recharge Wallet</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Amount ($)"
+            type="number"
+            value={rechargeAmount}
+            onChange={(e) => setRechargeAmount(e.target.value)}
+            fullWidth
+            margin="normal"
+            inputProps={{ min: 0, step: 0.01 }}
+          />
+          <Typography variant="body2" color="text.secondary" className="mt-2">
+            Enter the amount you want to add to your wallet. This will simulate a payment gateway integration.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRechargeDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleRecharge} variant="contained" startIcon={<CreditCard />}>
+            Recharge
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { Dashboard, LocalShipping, Description, Receipt, Person, AdminPanelSettings, Logout } from '@mui/icons-material';
+import { Dashboard, LocalShipping, Description, Receipt, Person, AdminPanelSettings, Logout, Inventory, LocalShippingOutlined, Assessment, CloudUpload, SettingsApplications, RequestQuote } from '@mui/icons-material';
 
 const Sidebar = () => {
   const { logout, user } = useAuth();
@@ -15,10 +15,17 @@ const Sidebar = () => {
 
   const menuItems = [
     { to: '/dashboard', label: 'Dashboard', icon: <Dashboard /> },
-    { to: '/shipments', label: 'Shipments', icon: <LocalShipping /> },
+    { to: '/shipments', label: 'Orders', icon: <LocalShipping /> },
+    { to: '/multi-box', label: 'Multi Box', icon: <Inventory /> },
     { to: '/manifests', label: 'Manifests', icon: <Description /> },
-    { to: '/billing', label: 'Billing', icon: <Receipt /> },
-    { to: '/profile', label: 'Profile', icon: <Person /> },
+    { to: '/pickup', label: 'Pickup', icon: <LocalShippingOutlined /> },
+    { to: '/rate-comparison', label: 'Rate Calculator', icon: <Assessment /> },
+    { to: '/bulk-report', label: 'Bulk Report', icon: <Assessment /> },
+    { to: '/billing', label: 'Wallet', icon: <Receipt /> },
+    { to: '/documents', label: 'Documents', icon: <CloudUpload /> },
+    { to: '/integrations', label: 'Integrations', icon: <SettingsApplications /> },
+    { to: '/request-quote', label: 'Request Quote', icon: <RequestQuote /> },
+    { to: '/profile', label: 'Settings', icon: <Person /> },
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', icon: <AdminPanelSettings /> }] : []),
   ];
 

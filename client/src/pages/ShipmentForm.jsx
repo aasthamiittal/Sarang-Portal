@@ -27,7 +27,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initialData.id ? 'Edit Shipment' : 'Add Shipment'}</DialogTitle>
+      <DialogTitle>{initialData._id ? 'Edit Order' : 'Create New Order'}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <TextField
@@ -70,7 +70,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="contained" color="primary">
-            {initialData.id ? 'Update' : 'Add'}
+            {initialData._id ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </form>

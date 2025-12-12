@@ -14,6 +14,138 @@ const upload = multer({ dest: 'uploads/' });
 
 router.use(auth);
 
+// GET /dashboard-summary - Get order summary for dashboard
+router.get('/dashboard-summary', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user.id };
+
+    // Apply date filter
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        default:
+          // custom range or no filter
+          break;
+      }
+
+      if (dateFilter === 'today') {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    const shipments = await Shipment.find(query);
+
+    const summary = {
+      allOrders: shipments.length,
+      draftedOrders: shipments.filter(s => s.status === 'draft').length,
+      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
+      packedOrders: shipments.filter(s => s.status === 'packed').length,
+      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length
+    };
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /actions-summary - Get actions summary for dashboard
+router.get('/actions-summary', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user.id };
+
+    // Apply date filter similar to above
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+      }
+
+      if (dateFilter === 'today') {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    // Mock data - in real app, these would come from actual models
+    const summary = {
+      pickupsInProgress: Math.floor(Math.random() * 5), // Mock
+      openManifests: Math.floor(Math.random() * 3), // Mock
+      disputedOrders: Math.floor(Math.random() * 2) // Mock
+    };
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /export - Export shipments to CSV
+router.get('/export', async (req, res) => {
+  try {
+    const { status, carrier, startDate, endDate } = req.query;
+    const query = { user: req.user.id };
+
+    if (status) query.status = status;
+    if (carrier) query.carrier = new RegExp(carrier, 'i');
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
+
+    // Create CSV content
+    const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
+    const csvRows = shipments.map(shipment =>
+      `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
+    ).join('\n');
+
+    const csvContent = csvHeaders + csvRows;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
+    res.send(csvContent);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET / - Retrieve all shipments for the authenticated user with filters
 router.get('/', async (req, res) => {
   try {
@@ -58,15 +190,17 @@ router.get('/', async (req, res) => {
 
 // POST / - Create a new shipment
 router.post('/', async (req, res) => {
-  const { origin, destination, carrier, weight, status } = req.body;
+  const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes } = req.body;
   if (!origin || !destination || !carrier || !weight) {
     return res.status(400).json({ message: 'Origin, destination, carrier, and weight are required' });
   }
   try {
     const cost = parseFloat(weight) * 10;
     const trackingNumber = randomUUID();
-    const initialStatus = status || 'pending';
+    const orderId = 'ORD-' + Date.now();
+    const initialStatus = status || 'draft';
     const shipment = new Shipment({
+      orderId,
       trackingNumber,
       origin,
       destination,
@@ -74,8 +208,11 @@ router.post('/', async (req, res) => {
       weight,
       cost,
       status: initialStatus,
+      customerInfo,
+      productInfo,
+      orderNotes,
       user: req.user.id,
-      statusHistory: [{ status: initialStatus, note: 'Shipment created' }]
+      statusHistory: [{ status: initialStatus, note: 'Order created' }]
     });
     await shipment.save();
     const billing = new Billing({
@@ -169,6 +306,7 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
         const status = data.status || 'pending';
 
         shipments.push({
+          orderId: 'ORD-' + Date.now() + '-' + shipments.length,
           trackingNumber,
           origin: data.origin,
           destination: data.destination,
@@ -207,6 +345,165 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
   } catch (err) {
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /dashboard-summary - Get order summary for dashboard
+router.get('/dashboard-summary', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user.id };
+
+    // Apply date filter
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        default:
+          // custom range or no filter
+          break;
+      }
+
+      if (dateFilter === 'today') {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    const shipments = await Shipment.find(query);
+
+    const summary = {
+      allOrders: shipments.length,
+      draftedOrders: shipments.filter(s => s.status === 'draft').length,
+      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
+      packedOrders: shipments.filter(s => s.status === 'packed').length,
+      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length
+    };
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /actions-summary - Get actions summary for dashboard
+router.get('/actions-summary', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user.id };
+
+    // Apply date filter similar to above
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+      }
+
+      if (dateFilter === 'today') {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    // Mock data - in real app, these would come from actual models
+    const summary = {
+      pickupsInProgress: Math.floor(Math.random() * 5), // Mock
+      openManifests: Math.floor(Math.random() * 3), // Mock
+      disputedOrders: Math.floor(Math.random() * 2) // Mock
+    };
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /export - Export shipments to CSV
+router.get('/export', async (req, res) => {
+  try {
+    const { status, carrier, startDate, endDate } = req.query;
+    const query = { user: req.user.id };
+
+    if (status) query.status = status;
+    if (carrier) query.carrier = new RegExp(carrier, 'i');
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
+
+    // Create CSV content
+    const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
+    const csvRows = shipments.map(shipment =>
+      `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
+    ).join('\n');
+
+    const csvContent = csvHeaders + csvRows;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
+    res.send(csvContent);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/label - Generate AWB label
+router.get('/:id/label', async (req, res) => {
+  try {
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user.id });
+    if (!shipment) {
+      return res.status(404).json({ message: 'Shipment not found' });
+    }
+
+    // Mock label generation - in real app, this would generate a PDF or image
+    const labelContent = `
+      AWB Label
+      Order ID: ${shipment.orderId}
+      Tracking: ${shipment.trackingNumber}
+      From: ${shipment.origin}
+      To: ${shipment.destination}
+      Weight: ${shipment.weight}kg
+      Status: ${shipment.status}
+    `;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.trackingNumber}.txt"`);
+    res.send(labelContent);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
