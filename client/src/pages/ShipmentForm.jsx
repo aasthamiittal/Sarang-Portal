@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Typography } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
@@ -9,14 +9,48 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
     destination: '',
     carrier: '',
     weight: '',
+    pickupAddress: {
+      name: '',
+      address: '',
+      phone: ''
+    },
+    customerInfo: {
+      firstName: '',
+      lastName: '',
+      mobile: '',
+      alternateMobile: '',
+      email: '',
+      country: '',
+      address1: '',
+      address2: '',
+      landmark: '',
+      pincode: '',
+      city: '',
+      state: ''
+    },
+    billingSameAsShipping: true,
   });
 
   useEffect(() => {
-    setFormData(initialData);
+    setFormData(prev => ({
+      ...prev,
+      ...initialData,
+      pickupAddress: { ...prev.pickupAddress, ...initialData.pickupAddress },
+      customerInfo: { ...prev.customerInfo, ...initialData.customerInfo }
+    }));
   }, [initialData]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setFormData({
+        ...formData,
+        [parent]: { ...formData[parent], [child]: value }
+      });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = (e) => {
@@ -29,7 +63,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{initialData._id ? 'Edit Order' : 'Create New Order'}</DialogTitle>
       <form onSubmit={handleSubmit}>
-        <DialogContent>
+        <DialogContent style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <TextField
             label="Origin"
             name="origin"
@@ -61,6 +95,141 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             label="Weight"
             name="weight"
             value={formData.weight || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+
+          <Typography variant="h6" style={{ marginTop: 20 }}>Pickup Address</Typography>
+          <TextField
+            label="Pickup Name"
+            name="pickupAddress.name"
+            value={formData.pickupAddress?.name || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Pickup Address"
+            name="pickupAddress.address"
+            value={formData.pickupAddress?.address || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Pickup Phone"
+            name="pickupAddress.phone"
+            value={formData.pickupAddress?.phone || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+
+          <Typography variant="h6" style={{ marginTop: 20 }}>Customer Information</Typography>
+          <TextField
+            label="First Name"
+            name="customerInfo.firstName"
+            value={formData.customerInfo?.firstName || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Last Name"
+            name="customerInfo.lastName"
+            value={formData.customerInfo?.lastName || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Mobile Number"
+            name="customerInfo.mobile"
+            value={formData.customerInfo?.mobile || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Alternate Mobile"
+            name="customerInfo.alternateMobile"
+            value={formData.customerInfo?.alternateMobile || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Email Address"
+            name="customerInfo.email"
+            value={formData.customerInfo?.email || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+            type="email"
+          />
+          <TextField
+            label="Country"
+            name="customerInfo.country"
+            value={formData.customerInfo?.country || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Address 1"
+            name="customerInfo.address1"
+            value={formData.customerInfo?.address1 || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Address 2"
+            name="customerInfo.address2"
+            value={formData.customerInfo?.address2 || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="Landmark"
+            name="customerInfo.landmark"
+            value={formData.customerInfo?.landmark || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Pincode"
+            name="customerInfo.pincode"
+            value={formData.customerInfo?.pincode || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="City"
+            name="customerInfo.city"
+            value={formData.customerInfo?.city || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
+          />
+          <TextField
+            label="State"
+            name="customerInfo.state"
+            value={formData.customerInfo?.state || ''}
             onChange={handleChange}
             fullWidth
             margin="normal"

@@ -13,12 +13,26 @@ const shipmentSchema = new mongoose.Schema({
   dispatchDate: { type: Date },
   deliveryDate: { type: Date },
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
-  customerInfo: {
+  pickupAddress: {
     name: String,
-    email: String,
-    phone: String,
-    address: String
+    address: String,
+    phone: String
   },
+  customerInfo: {
+    firstName: String,
+    lastName: String,
+    mobile: String,
+    alternateMobile: String,
+    email: String,
+    country: String,
+    address1: String,
+    address2: String,
+    landmark: String,
+    pincode: String,
+    city: String,
+    state: String
+  },
+  billingSameAsShipping: { type: Boolean, default: true },
   productInfo: {
     description: String,
     quantity: Number,

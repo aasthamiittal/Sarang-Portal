@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider, useMediaQuery } from '@mui/material';
+import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider, useMediaQuery, Tabs, Tab, Box } from '@mui/material';
 import { Add, Edit, Delete, Timeline, CloudUpload, Search, FilterList, Print, GetApp, Visibility, Assignment } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
@@ -20,12 +20,25 @@ const getStatusColor = (status) => {
   }
 };
 
+const statusTabs = [
+  { label: 'All Orders', value: '' },
+  { label: 'Drafts', value: 'draft' },
+  { label: 'Ready', value: 'pending-label' },
+  { label: 'Packed', value: 'packed' },
+  { label: 'Manifested', value: 'in-transit' },
+  { label: 'Dispatched', value: 'dispatched' },
+  { label: 'Received', value: 'delivered' },
+  { label: 'Cancelled', value: 'cancelled' },
+];
+
 const columns = [
-  { field: 'orderId', headerName: 'Order ID', width: 100, renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
-  { field: 'trackingNumber', headerName: 'Tracking Number', width: 150, renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
+  { field: 'orderId', headerName: 'Order ID', width: 120, sortable: true, renderCell: (params) => <Typography noWrap style={{cursor: 'pointer', color: 'blue'}} onClick={() => params.api.handleViewDetails(params.row)}>{params.value}</Typography> },
+  { field: 'customerDetails', headerName: 'Customer Details', width: 200, renderCell: (params) => <div><Typography noWrap>{params.row.customerInfo?.firstName} {params.row.customerInfo?.lastName}</Typography><Typography noWrap variant="body2">{params.row.customerInfo?.email}</Typography><Typography noWrap variant="body2">{params.row.customerInfo?.mobile}</Typography></div> },
+  { field: 'createdAt', headerName: 'Order Date', width: 120, sortable: true, renderCell: (params) => <Typography noWrap>{new Date(params.value).toLocaleDateString()}</Typography> },
+  { field: 'packageDetails', headerName: 'Package Details', width: 150, renderCell: (params) => <div><Typography noWrap>{params.row.weight}kg</Typography><Typography noWrap variant="body2">${params.row.cost}</Typography><Typography noWrap variant="body2">{params.row.carrier}</Typography></div> },
   {
     field: 'status',
-    headerName: 'Order Status',
+    headerName: 'Status',
     width: 110,
     renderCell: (params) => (
       <Chip
@@ -35,30 +48,26 @@ const columns = [
       />
     ),
   },
-  { field: 'pickupDate', headerName: 'Pickup Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
-  { field: 'dispatchDate', headerName: 'Dispatch Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
-  { field: 'deliveryDate', headerName: 'Delivery Date', width: 100, renderCell: (params) => <Typography noWrap>{params?.value ? new Date(params.value).toLocaleDateString() : '-'}</Typography> },
-  { field: 'weight', headerName: 'Weight (kg)', width: 80, type: 'number', renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
-  { field: 'cost', headerName: 'Cost ($)', width: 80, type: 'number', renderCell: (params) => <Typography noWrap>{params.value}</Typography> },
+  { field: 'lastMile', headerName: 'Last Mile Details', width: 150, renderCell: (params) => <Typography noWrap>{params.row.deliveryDate ? 'Delivered' : params.row.dispatchDate ? 'Dispatched' : '-'}</Typography> },
   {
     field: 'actions',
     headerName: 'Actions',
     width: 160,
     renderCell: (params) => (
       <div className="flex space-x-1">
-        <IconButton size="small" onClick={() => params.api.handleViewDetails(params.row)} title="View Details">
+        <IconButton size="small" onClick={() => handleViewDetails(params.row)} title="View Details">
           <Visibility />
         </IconButton>
-        <IconButton size="small" onClick={() => params.api.handlePrintLabel(params.row)} title="Print Label">
+        <IconButton size="small" onClick={() => handlePrintLabel(params.row)} title="Print Label">
           <Print />
         </IconButton>
-        <IconButton size="small" onClick={() => params.api.handleViewTimeline(params.row)} title="Timeline">
+        <IconButton size="small" onClick={() => handleViewTimeline(params.row)} title="Timeline">
           <Timeline />
         </IconButton>
-        <IconButton size="small" onClick={() => params.api.handleEdit(params.row)} title="Edit">
+        <IconButton size="small" onClick={() => handleEdit(params.row)} title="Edit">
           <Edit />
         </IconButton>
-        <IconButton size="small" color="error" onClick={() => params.api.handleDelete(params.row.id)} title="Delete">
+        <IconButton size="small" color="error" onClick={() => handleDelete(params.row._id)} title="Delete">
           <Delete />
         </IconButton>
       </div>
@@ -91,6 +100,7 @@ const Shipments = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [editingShipment, setEditingShipment] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(0);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -236,6 +246,11 @@ const Shipments = () => {
     }
   };
 
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+    setFilters({ ...filters, status: statusTabs[newValue].value });
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -252,6 +267,15 @@ const Shipments = () => {
           </Button>
         </div>
       </div>
+
+      {/* Status Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={selectedTab} onChange={handleTabChange} aria-label="status tabs">
+          {statusTabs.map((tab, index) => (
+            <Tab key={index} label={tab.label} />
+          ))}
+        </Tabs>
+      </Box>
 
       {/* Filters */}
       <Card className="mb-6">
@@ -363,25 +387,7 @@ const Shipments = () => {
           <DataGrid
             rows={shipments}
             getRowId={(row) => row._id}
-            columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
-              <div className="flex space-x-1">
-                <IconButton size="small" onClick={() => handleViewDetails(params.row)} title="View Details">
-                  <Visibility />
-                </IconButton>
-                <IconButton size="small" onClick={() => handlePrintLabel(params.row)} title="Print Label">
-                  <Print />
-                </IconButton>
-                <IconButton size="small" onClick={() => handleViewTimeline(params.row)} title="Timeline">
-                  <Timeline />
-                </IconButton>
-                <IconButton size="small" onClick={() => handleEdit(params.row)} title="Edit">
-                  <Edit />
-                </IconButton>
-                <IconButton size="small" color="error" onClick={() => handleDelete(params.row._id)} title="Delete">
-                  <Delete />
-                </IconButton>
-              </div>
-            )} : col)}
+            columns={columns}
             page={page - 1}
             pageSize={pageSize}
             rowsPerPageOptions={[5, 10, 25]}
@@ -434,23 +440,75 @@ const Shipments = () => {
           {selectedShipment && (
             <div className="space-y-6">
               <div>
-                <Typography variant="h6" gutterBottom>Customer Information</Typography>
+                <Typography variant="h6" gutterBottom>Pickup Address</Typography>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Name</Typography>
-                    <Typography>{selectedShipment.customerInfo?.name || 'N/A'}</Typography>
+                    <Typography>{selectedShipment.pickupAddress?.name || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Address</Typography>
+                    <Typography>{selectedShipment.pickupAddress?.address || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Phone</Typography>
+                    <Typography>{selectedShipment.pickupAddress?.phone || 'N/A'}</Typography>
+                  </div>
+                </div>
+              </div>
+
+              <Divider />
+
+              <div>
+                <Typography variant="h6" gutterBottom>Customer Information</Typography>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">First Name</Typography>
+                    <Typography>{selectedShipment.customerInfo?.firstName || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Last Name</Typography>
+                    <Typography>{selectedShipment.customerInfo?.lastName || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Mobile</Typography>
+                    <Typography>{selectedShipment.customerInfo?.mobile || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Alternate Mobile</Typography>
+                    <Typography>{selectedShipment.customerInfo?.alternateMobile || 'N/A'}</Typography>
                   </div>
                   <div className="min-h-16">
                     <Typography variant="body2" color="text.secondary">Email</Typography>
                     <Typography>{selectedShipment.customerInfo?.email || 'N/A'}</Typography>
                   </div>
                   <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Phone</Typography>
-                    <Typography>{selectedShipment.customerInfo?.phone || 'N/A'}</Typography>
+                    <Typography variant="body2" color="text.secondary">Country</Typography>
+                    <Typography>{selectedShipment.customerInfo?.country || 'N/A'}</Typography>
                   </div>
                   <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Address</Typography>
-                    <Typography>{selectedShipment.customerInfo?.address || 'N/A'}</Typography>
+                    <Typography variant="body2" color="text.secondary">Address 1</Typography>
+                    <Typography>{selectedShipment.customerInfo?.address1 || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Address 2</Typography>
+                    <Typography>{selectedShipment.customerInfo?.address2 || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Landmark</Typography>
+                    <Typography>{selectedShipment.customerInfo?.landmark || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">Pincode</Typography>
+                    <Typography>{selectedShipment.customerInfo?.pincode || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">City</Typography>
+                    <Typography>{selectedShipment.customerInfo?.city || 'N/A'}</Typography>
+                  </div>
+                  <div className="min-h-16">
+                    <Typography variant="body2" color="text.secondary">State</Typography>
+                    <Typography>{selectedShipment.customerInfo?.state || 'N/A'}</Typography>
                   </div>
                 </div>
               </div>

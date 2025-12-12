@@ -190,7 +190,7 @@ router.get('/', async (req, res) => {
 
 // POST / - Create a new shipment
 router.post('/', async (req, res) => {
-  const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes } = req.body;
+  const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes, pickupAddress, billingSameAsShipping } = req.body;
   if (!origin || !destination || !carrier || !weight) {
     return res.status(400).json({ message: 'Origin, destination, carrier, and weight are required' });
   }
@@ -211,6 +211,8 @@ router.post('/', async (req, res) => {
       customerInfo,
       productInfo,
       orderNotes,
+      pickupAddress,
+      billingSameAsShipping,
       user: req.user.id,
       statusHistory: [{ status: initialStatus, note: 'Order created' }]
     });
