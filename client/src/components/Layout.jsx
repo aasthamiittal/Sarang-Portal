@@ -7,6 +7,7 @@ import Manifests from '../pages/Manifests';
 import Billing from '../pages/Billing';
 import Profile from '../pages/Profile';
 import Admin from '../pages/Admin';
+import RateComparison from '../pages/RateComparison';
 
 const Layout = () => {
   return (
@@ -20,6 +21,7 @@ const Layout = () => {
           <Route path="/billing" element={<Billing />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/rate-comparison" element={<RateComparison />} />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
       </main>

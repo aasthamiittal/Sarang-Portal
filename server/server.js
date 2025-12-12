@@ -30,11 +30,15 @@ const shipmentRoutes = require('./routes/shipments');
 const manifestRoutes = require('./routes/manifests');
 const billingRoutes = require('./routes/billing');
 const reportRoutes = require('./routes/reports');
+const carrierRoutes = require('./routes/carriers');
+const rateRoutes = require('./routes/rates');
 
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/manifests', manifestRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/carriers', carrierRoutes);
+app.use('/api/rates', rateRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 5000;

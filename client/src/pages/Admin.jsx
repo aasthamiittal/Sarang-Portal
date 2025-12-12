@@ -68,6 +68,8 @@ const Admin = () => {
   const [tabValue, setTabValue] = useState(0);
   const [users, setUsers] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
+  const [carriers, setCarriers] = useState([]);
+  const [rates, setRates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
