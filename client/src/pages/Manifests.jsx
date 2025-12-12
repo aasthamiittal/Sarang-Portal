@@ -6,12 +6,12 @@ import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
 const columns = [
-  { field: 'fileName', headerName: 'File Name', width: 250 },
-  { field: 'uploadedAt', headerName: 'Uploaded At', width: 180, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
+  { field: 'fileName', headerName: 'File Name', minWidth: 250 },
+  { field: 'uploadedAt', headerName: 'Uploaded At', minWidth: 180, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
   {
     field: 'actions',
     headerName: 'Actions',
-    width: 150,
+    minWidth: 150,
     renderCell: (params) => (
       <div className="flex space-x-1">
         <Button size="small" startIcon={<Visibility />} onClick={() => params.api.handleView(params.row)}>View</Button>
@@ -145,7 +145,7 @@ const Manifests = () => {
         </Card>
       )}
       <Card>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <div style={{ height: 500, width: '100%' }}>
             <DataGrid
               rows={manifests}
@@ -160,6 +160,7 @@ const Manifests = () => {
               rowsPerPageOptions={[5, 10, 25]}
               loading={loading}
               disableSelectionOnClick
+              autoWidth
             />
           </div>
         </CardContent>

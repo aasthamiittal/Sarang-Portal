@@ -21,12 +21,12 @@ const getStatusColor = (status) => {
 };
 
 const columns = [
-  { field: 'orderId', headerName: 'Order ID', width: 120 },
-  { field: 'trackingNumber', headerName: 'Tracking Number', width: 180 },
+  { field: 'orderId', headerName: 'Order ID', minWidth: 100 },
+  { field: 'trackingNumber', headerName: 'Tracking Number', minWidth: 150 },
   {
     field: 'status',
     headerName: 'Order Status',
-    width: 130,
+    minWidth: 110,
     renderCell: (params) => (
       <Chip
         label={params.value.replace('-', ' ').toUpperCase()}
@@ -35,15 +35,15 @@ const columns = [
       />
     ),
   },
-  { field: 'pickupDate', headerName: 'Pickup Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'dispatchDate', headerName: 'Dispatch Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'deliveryDate', headerName: 'Delivery Date', width: 120, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'weight', headerName: 'Weight (kg)', width: 100, type: 'number' },
-  { field: 'cost', headerName: 'Cost ($)', width: 100, type: 'number' },
+  { field: 'pickupDate', headerName: 'Pickup Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'dispatchDate', headerName: 'Dispatch Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'deliveryDate', headerName: 'Delivery Date', minWidth: 100, renderCell: (params) => params?.value ? new Date(params.value).toLocaleDateString() : '-' },
+  { field: 'weight', headerName: 'Weight (kg)', minWidth: 80, type: 'number' },
+  { field: 'cost', headerName: 'Cost ($)', minWidth: 80, type: 'number' },
   {
     field: 'actions',
     headerName: 'Actions',
-    width: 200,
+    minWidth: 160,
     renderCell: (params) => (
       <div className="flex space-x-1">
         <IconButton size="small" onClick={() => params.api.handleViewDetails(params.row)} title="View Details">
@@ -357,7 +357,7 @@ const Shipments = () => {
         </CardContent>
       </Card>
 
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
         <div style={{ height: 500, width: '100%' }}>
           <DataGrid
             rows={shipments}
@@ -390,6 +390,7 @@ const Shipments = () => {
             rowCount={total}
             loading={loading}
             disableSelectionOnClick
+            autoWidth
           />
         </div>
       </div>
