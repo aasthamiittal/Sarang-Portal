@@ -9,8 +9,8 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={authenticated ? <Navigate to="/dashboard" /> : <Login />} />
-      <Route path="/*" element={authenticated ? <Layout /> : <Navigate to="/login" />} />
+      <Route path="/" element={authenticated ? <Navigate to="/dashboard" /> : <Login />} />
+      <Route path="/*" element={authenticated ? <Layout /> : <Navigate to="/" />} />
     </Routes>
   );
 }

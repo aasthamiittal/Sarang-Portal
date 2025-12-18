@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
         if (error.response?.status === 401) {
           // Token expired or invalid
           logout();
-          navigate('/login');
+          navigate('/');
         }
         return Promise.reject(error);
       }
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+      const response = await axios.post('http://localhost:5000/api/auth/', { email, password });
       const { token, user: userData } = response.data;
       localStorage.setItem('token', token);
       setToken(token);
