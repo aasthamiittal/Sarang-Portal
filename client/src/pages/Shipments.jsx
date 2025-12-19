@@ -1,7 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid, Card, CardContent, IconButton, Typography, Divider, useMediaQuery, Tabs, Tab, Box } from '@mui/material';
-import { Add, Edit, Delete, Timeline, CloudUpload, Search, FilterList, Print, GetApp, Visibility, Assignment } from '@mui/icons-material';
+import { 
+  Button, 
+  Chip, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  TextField, 
+  MenuItem, 
+  Box,
+  IconButton, 
+  Typography,
+  Tabs,
+  Tab,
+  InputAdornment
+} from '@mui/material';
+import { 
+  Add, 
+  Edit, 
+  Delete, 
+  Timeline, 
+  CloudUpload, 
+  Search, 
+  Print, 
+  GetApp, 
+  Visibility,
+  Tune
+} from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import ShipmentForm from './ShipmentForm';
@@ -31,60 +57,15 @@ const statusTabs = [
   { label: 'Cancelled', value: 'cancelled' },
 ];
 
-const columns = [
-  { field: 'orderId', headerName: 'Order ID', width: 120, sortable: true, renderCell: (params) => <Typography noWrap style={{cursor: 'pointer', color: 'blue'}} onClick={() => params.api.handleViewDetails(params.row)}>{params.value}</Typography> },
-  { field: 'customerDetails', headerName: 'Customer Details', width: 200, renderCell: (params) => <div><Typography noWrap>{params.row.customerInfo?.firstName} {params.row.customerInfo?.lastName}</Typography><Typography noWrap variant="body2">{params.row.customerInfo?.email}</Typography><Typography noWrap variant="body2">{params.row.customerInfo?.mobile}</Typography></div> },
-  { field: 'createdAt', headerName: 'Order Date', width: 120, sortable: true, renderCell: (params) => <Typography noWrap>{new Date(params.value).toLocaleDateString()}</Typography> },
-  { field: 'packageDetails', headerName: 'Package Details', width: 150, renderCell: (params) => <div><Typography noWrap>{params.row.weight}kg</Typography><Typography noWrap variant="body2">${params.row.cost}</Typography><Typography noWrap variant="body2">{params.row.carrier}</Typography></div> },
-  {
-    field: 'status',
-    headerName: 'Status',
-    width: 110,
-    renderCell: (params) => (
-      <Chip
-        label={params.value.replace('-', ' ').toUpperCase()}
-        color={getStatusColor(params.value)}
-        size="small"
-      />
-    ),
-  },
-  { field: 'lastMile', headerName: 'Last Mile Details', width: 150, renderCell: (params) => <Typography noWrap>{params.row.deliveryDate ? 'Delivered' : params.row.dispatchDate ? 'Dispatched' : '-'}</Typography> },
-  {
-    field: 'actions',
-    headerName: 'Actions',
-    width: 160,
-    renderCell: (params) => (
-      <div className="flex space-x-1">
-        <IconButton size="small" onClick={() => handleViewDetails(params.row)} title="View Details">
-          <Visibility />
-        </IconButton>
-        <IconButton size="small" onClick={() => handlePrintLabel(params.row)} title="Print Label">
-          <Print />
-        </IconButton>
-        <IconButton size="small" onClick={() => handleViewTimeline(params.row)} title="Timeline">
-          <Timeline />
-        </IconButton>
-        <IconButton size="small" onClick={() => handleEdit(params.row)} title="Edit">
-          <Edit />
-        </IconButton>
-        <IconButton size="small" color="error" onClick={() => handleDelete(params.row._id)} title="Delete">
-          <Delete />
-        </IconButton>
-      </div>
-    ),
-  },
-];
-
 const Shipments = () => {
   const { token } = useAuth();
-  const isSmall = useMediaQuery('(max-width:768px)');
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
-    search: '',
     status: '',
     carrier: '',
     paymentStatus: '',
@@ -97,6 +78,7 @@ const Shipments = () => {
   const [timelineDialogOpen, setTimelineDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [editingShipment, setEditingShipment] = useState(null);
@@ -104,18 +86,152 @@ const Shipments = () => {
 
   const headers = { Authorization: `Bearer ${token}` };
 
+  const columns = [
+    { 
+      field: 'orderId', 
+      headerName: 'Order ID', 
+      flex: 1,
+      minWidth: 140,
+      sortable: true,
+      renderCell: (params) => (
+        <Box>
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: '#1976d2', 
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              '&:hover': { textDecoration: 'underline' }
+            }}
+            onClick={() => handleViewDetails(params.row)}
+          >
+            {params.value}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+            DE-{params.row.trackingNumber?.slice(-5) || 'N/A'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.6875rem' }}>
+            Ref {params.row.referenceNumber || 'N/A'}
+          </Typography>
+        </Box>
+      )
+    },
+    { 
+      field: 'customerDetails', 
+      headerName: 'Customer Details', 
+      flex: 1.2,
+      minWidth: 160,
+      renderCell: (params) => (
+        <Box>
+          <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.8125rem' }}>
+            {params.row.customerInfo?.firstName} {params.row.customerInfo?.lastName}
+          </Typography>
+          <Typography 
+            variant="caption" 
+            color="text.secondary" 
+            display="block"
+            sx={{ 
+              fontSize: '0.6875rem',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {params.row.customerInfo?.email}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+            {params.row.customerInfo?.mobile}
+          </Typography>
+        </Box>
+      )
+    },
+    { 
+      field: 'createdAt', 
+      headerName: 'Order Date', 
+      flex: 0.9,
+      minWidth: 110,
+      sortable: true,
+      renderCell: (params) => {
+        const date = new Date(params.value);
+        return (
+          <Box>
+            <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
+              {date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+              {date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </Typography>
+          </Box>
+        );
+      }
+    },
+    { 
+      field: 'packageDetails', 
+      headerName: 'Package', 
+      flex: 0.8,
+      minWidth: 100,
+      renderCell: (params) => (
+        <Box>
+          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>{params.row.weight} kg</Typography>
+          <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.8125rem' }}>
+            ₹{params.row.cost?.toFixed(2) || '0.00'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
+            {params.row.carrier || 'N/A'}
+          </Typography>
+        </Box>
+      )
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      flex: 0.7,
+      minWidth: 90,
+      renderCell: (params) => (
+        <Chip
+          label={params.value.replace('-', ' ')}
+          color={getStatusColor(params.value)}
+          size="small"
+          sx={{ 
+            textTransform: 'capitalize', 
+            fontWeight: 500,
+            fontSize: '0.6875rem',
+            height: '22px'
+          }}
+        />
+      ),
+    },
+    { 
+      field: 'lastMile', 
+      headerName: 'Delivery', 
+      flex: 0.7,
+      minWidth: 90,
+      renderCell: (params) => (
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+          {params.row.deliveryDate 
+            ? 'Delivered' 
+            : params.row.dispatchDate 
+            ? 'Dispatched' 
+            : '-'}
+        </Typography>
+      )
+    },
+  ];
+
   useEffect(() => {
     fetchShipments();
   }, [token, page, pageSize]);
 
   useEffect(() => {
-    if (Object.values(filters).some(v => v)) {
-      fetchShipments(1, filters);
+    const filterValues = { ...filters, search: searchQuery };
+    if (Object.values(filterValues).some(v => v)) {
+      fetchShipments(1, filterValues);
       setPage(1);
     }
-  }, [filters]);
+  }, [filters, searchQuery]);
 
-  const fetchShipments = async (currentPage = page, currentFilters = filters) => {
+  const fetchShipments = async (currentPage = page, currentFilters = { ...filters, search: searchQuery }) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -173,7 +289,7 @@ const Shipments = () => {
 
   const handleExport = async () => {
     try {
-      const params = new URLSearchParams(filters);
+      const params = new URLSearchParams({ ...filters, search: searchQuery });
       const response = await axios.get(`http://localhost:5000/api/shipments/export?${params}`, {
         headers,
         responseType: 'blob'
@@ -251,176 +367,322 @@ const Shipments = () => {
     setFilters({ ...filters, status: statusTabs[newValue].value });
   };
 
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setFilters({
+      status: '',
+      carrier: '',
+      paymentStatus: '',
+      origin: '',
+      destination: '',
+      startDate: '',
+      endDate: ''
+    });
+    setSelectedTab(0);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outlined" startIcon={<GetApp />} onClick={handleExport}>
-            Export CSV
+    <Box sx={{ bgcolor: '#f8f9fa', minHeight: '100vh', p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={600} color="text.primary">
+            All Orders
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Orders &gt; All
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Button 
+            variant="contained" 
+            startIcon={<Add />}
+            sx={{ 
+              bgcolor: '#4e5dde',
+              textTransform: 'none',
+              fontWeight: 500,
+              px: 2.5,
+              '&:hover': { bgcolor: '#3d4bc7' }
+            }}
+            onClick={handleAdd}
+          >
+            Add Order
           </Button>
-          <Button variant="outlined" startIcon={<CloudUpload />} onClick={handleBulkUpload}>
-            Bulk Upload
+          <Button 
+            variant="contained"
+            startIcon={<CloudUpload />}
+            sx={{ 
+              bgcolor: '#4e5dde',
+              textTransform: 'none',
+              fontWeight: 500,
+              px: 2.5,
+              '&:hover': { bgcolor: '#3d4bc7' }
+            }}
+            onClick={handleBulkUpload}
+          >
+            Bulk Order
           </Button>
-          <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleAdd}>
-            Create New Order
-          </Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       {/* Status Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={selectedTab} onChange={handleTabChange} aria-label="status tabs">
+      <Box sx={{ bgcolor: 'white', borderRadius: 1, mb: 2, overflow: 'auto' }}>
+        <Tabs 
+          value={selectedTab} 
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 500,
+              fontSize: '0.9375rem',
+              color: '#6b7280',
+              minHeight: 48,
+              '&.Mui-selected': {
+                color: '#111827',
+                fontWeight: 600
+              }
+            },
+            '& .MuiTabs-indicator': {
+              height: 3,
+              bgcolor: '#111827'
+            }
+          }}
+        >
           {statusTabs.map((tab, index) => (
             <Tab key={index} label={tab.label} />
           ))}
         </Tabs>
       </Box>
 
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                label="Search"
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                InputProps={{
-                  startAdornment: <Search />,
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                select
-                fullWidth
-                label="Status"
-                value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="draft">Draft</MenuItem>
-                <MenuItem value="pending-label">Pending Label</MenuItem>
-                <MenuItem value="packed">Packed</MenuItem>
-                <MenuItem value="dispatched">Dispatched</MenuItem>
-                <MenuItem value="in-transit">In Transit</MenuItem>
-                <MenuItem value="delivered">Delivered</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                select
-                fullWidth
-                label="Payment Status"
-                value={filters.paymentStatus}
-                onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="paid">Paid</MenuItem>
-                <MenuItem value="failed">Failed</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                fullWidth
-                label="Carrier"
-                value={filters.carrier}
-                onChange={(e) => setFilters({ ...filters, carrier: e.target.value })}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                fullWidth
-                label="Origin"
-                value={filters.origin}
-                onChange={(e) => setFilters({ ...filters, origin: e.target.value })}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Start Date"
-                InputLabelProps={{ shrink: true }}
-                value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                type="date"
-                label="End Date"
-                InputLabelProps={{ shrink: true }}
-                value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 1 }}>
-              <Button
-                variant="outlined"
-                startIcon={<FilterList />}
-                onClick={() => setFilters({
-                  search: '',
-                  status: '',
-                  carrier: '',
-                  paymentStatus: '',
-                  origin: '',
-                  destination: '',
-                  startDate: '',
-                  endDate: ''
-                })}
-              >
-                Clear
-              </Button>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      {/* Search and Filters Bar */}
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 2, 
+        mb: 2,
+        bgcolor: 'white',
+        p: 2,
+        borderRadius: 1,
+        flexWrap: 'wrap'
+      }}>
+        <TextField
+          placeholder="Enter Tracking Id . . ."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ 
+            flex: '1 1 250px',
+            minWidth: '200px',
+            '& .MuiOutlinedInput-root': {
+              bgcolor: 'white',
+              '& fieldset': { borderColor: '#e5e7eb' }
+            }
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search sx={{ color: '#9ca3af' }} />
+              </InputAdornment>
+            ),
+          }}
+          size="small"
+        />
+        <Button
+          variant="outlined"
+          startIcon={<Tune />}
+          onClick={() => setFiltersDialogOpen(true)}
+          sx={{
+            textTransform: 'none',
+            borderColor: '#e5e7eb',
+            color: '#374151',
+            fontWeight: 500,
+            '&:hover': {
+              borderColor: '#d1d5db',
+              bgcolor: '#f9fafb'
+            }
+          }}
+        >
+          More Filters
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<GetApp />}
+          onClick={handleExport}
+          sx={{
+            textTransform: 'none',
+            borderColor: '#e5e7eb',
+            color: '#374151',
+            fontWeight: 500,
+            '&:hover': {
+              borderColor: '#d1d5db',
+              bgcolor: '#f9fafb'
+            }
+          }}
+        >
+          Export
+        </Button>
+      </Box>
 
-      <div className="bg-white rounded-lg shadow-md  overflow-x-auto">
-        <div style={{ height: 500, width: '100%' }}>
-          <DataGrid
-            rows={shipments}
-            getRowId={(row) => row._id}
-            columns={columns}
-            page={page - 1}
-            pageSize={pageSize}
-            rowsPerPageOptions={[5, 10, 25]}
-            onPageChange={(newPage) => setPage(newPage + 1)}
-            onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
-            paginationMode="server"
-            rowCount={total}
-            loading={loading}
-            disableSelectionOnClick
-            initialState={{
-              columns: {
-                columnVisibilityModel: isSmall ? { dispatchDate: false, deliveryDate: false, weight: false, cost: false } : {}
+      {/* Data Grid */}
+      <Box sx={{ 
+        bgcolor: 'white', 
+        borderRadius: 1,
+        overflow: 'hidden',
+        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+        width: '100%'
+      }}>
+        <DataGrid
+          rows={shipments}
+          getRowId={(row) => row._id}
+          columns={columns}
+          page={page - 1}
+          pageSize={pageSize}
+          rowsPerPageOptions={[5, 10, 25]}
+          onPageChange={(newPage) => setPage(newPage + 1)}
+          onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
+          paginationMode="server"
+          rowCount={total}
+          loading={loading}
+          disableSelectionOnClick
+          autoHeight
+          rowHeight={90}
+          sx={{
+            border: 'none',
+            width: '100%',
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: '#f9fafb',
+              borderBottom: '1px solid #e5e7eb',
+              color: '#6b7280',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            },
+            '& .MuiDataGrid-cell': {
+              borderBottom: '1px solid #f3f4f6',
+              py: 1.5
+            },
+            '& .MuiDataGrid-row': {
+              '&:hover': {
+                bgcolor: '#f9fafb'
               }
-            }}
-          />
-        </div>
-      </div>
+            },
+            '& .MuiDataGrid-footerContainer': {
+              borderTop: '1px solid #e5e7eb'
+            },
+            '& .MuiDataGrid-virtualScroller': {
+              overflowX: 'hidden'
+            }
+          }}
+        />
+      </Box>
+
+      {/* Filters Dialog */}
+      <Dialog 
+        open={filtersDialogOpen} 
+        onClose={() => setFiltersDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Advanced Filters</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mt: 1 }}>
+            <TextField
+              select
+              label="Status"
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="pending-label">Pending Label</MenuItem>
+              <MenuItem value="packed">Packed</MenuItem>
+              <MenuItem value="dispatched">Dispatched</MenuItem>
+              <MenuItem value="in-transit">In Transit</MenuItem>
+              <MenuItem value="delivered">Delivered</MenuItem>
+              <MenuItem value="cancelled">Cancelled</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Payment Status"
+              value={filters.paymentStatus}
+              onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="pending">Pending</MenuItem>
+              <MenuItem value="paid">Paid</MenuItem>
+              <MenuItem value="failed">Failed</MenuItem>
+            </TextField>
+            <TextField
+              label="Carrier"
+              value={filters.carrier}
+              onChange={(e) => setFilters({ ...filters, carrier: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="Origin"
+              value={filters.origin}
+              onChange={(e) => setFilters({ ...filters, origin: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              type="date"
+              label="Start Date"
+              InputLabelProps={{ shrink: true }}
+              value={filters.startDate}
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              type="date"
+              label="End Date"
+              InputLabelProps={{ shrink: true }}
+              value={filters.endDate}
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              size="small"
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={clearAllFilters}>Clear All</Button>
+          <Button onClick={() => setFiltersDialogOpen(false)} variant="contained">Apply</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Shipment Form Dialog */}
       <ShipmentForm
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleSubmit}
         initialData={editingShipment || {}}
       />
+
+      {/* Timeline Dialog */}
       <Dialog open={timelineDialogOpen} onClose={() => setTimelineDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Shipment Timeline - {selectedShipment?.trackingNumber}</DialogTitle>
         <DialogContent>
           {selectedShipment && <ShipmentTimeline statusHistory={selectedShipment.statusHistory} />}
         </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTimelineDialogOpen(false)}>Close</Button>
+        </DialogActions>
       </Dialog>
+
+      {/* Bulk Upload Dialog */}
       <Dialog open={bulkDialogOpen} onClose={() => setBulkDialogOpen(false)}>
         <DialogTitle>Bulk Upload Orders</DialogTitle>
         <DialogContent>
-          <p>Upload a CSV file with columns: origin, destination, carrier, weight, status (optional)</p>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Upload a CSV file with columns: origin, destination, carrier, weight, status (optional)
+          </Typography>
           <input
             type="file"
             accept=".csv"
@@ -434,127 +696,116 @@ const Shipments = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Details Dialog */}
       <Dialog open={detailsDialogOpen} onClose={() => setDetailsDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Order Details - {selectedShipment?.orderId}</DialogTitle>
         <DialogContent>
           {selectedShipment && (
-            <div className="space-y-6">
-              <div>
-                <Typography variant="h6" gutterBottom>Pickup Address</Typography>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Name</Typography>
-                    <Typography>{selectedShipment.pickupAddress?.name || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Address</Typography>
-                    <Typography>{selectedShipment.pickupAddress?.address || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Phone</Typography>
-                    <Typography>{selectedShipment.pickupAddress?.phone || 'N/A'}</Typography>
-                  </div>
-                </div>
-              </div>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+              {/* Pickup Address */}
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Pickup Address
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Name</Typography>
+                    <Typography variant="body2">{selectedShipment.pickupAddress?.name || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Address</Typography>
+                    <Typography variant="body2">{selectedShipment.pickupAddress?.address || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Phone</Typography>
+                    <Typography variant="body2">{selectedShipment.pickupAddress?.phone || 'N/A'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
 
-              <Divider />
+              {/* Customer Information */}
+              <Box sx={{ borderTop: '1px solid #e5e7eb', pt: 3 }}>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Customer Information
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">First Name</Typography>
+                    <Typography variant="body2">{selectedShipment.customerInfo?.firstName || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Last Name</Typography>
+                    <Typography variant="body2">{selectedShipment.customerInfo?.lastName || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Mobile</Typography>
+                    <Typography variant="body2">{selectedShipment.customerInfo?.mobile || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Email</Typography>
+                    <Typography variant="body2">{selectedShipment.customerInfo?.email || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Address</Typography>
+                    <Typography variant="body2">
+                      {selectedShipment.customerInfo?.address1}, {selectedShipment.customerInfo?.city}, {selectedShipment.customerInfo?.state}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Pincode</Typography>
+                    <Typography variant="body2">{selectedShipment.customerInfo?.pincode || 'N/A'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
 
-              <div>
-                <Typography variant="h6" gutterBottom>Customer Information</Typography>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">First Name</Typography>
-                    <Typography>{selectedShipment.customerInfo?.firstName || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Last Name</Typography>
-                    <Typography>{selectedShipment.customerInfo?.lastName || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Mobile</Typography>
-                    <Typography>{selectedShipment.customerInfo?.mobile || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Alternate Mobile</Typography>
-                    <Typography>{selectedShipment.customerInfo?.alternateMobile || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Email</Typography>
-                    <Typography>{selectedShipment.customerInfo?.email || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Country</Typography>
-                    <Typography>{selectedShipment.customerInfo?.country || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Address 1</Typography>
-                    <Typography>{selectedShipment.customerInfo?.address1 || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Address 2</Typography>
-                    <Typography>{selectedShipment.customerInfo?.address2 || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Landmark</Typography>
-                    <Typography>{selectedShipment.customerInfo?.landmark || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Pincode</Typography>
-                    <Typography>{selectedShipment.customerInfo?.pincode || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">City</Typography>
-                    <Typography>{selectedShipment.customerInfo?.city || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">State</Typography>
-                    <Typography>{selectedShipment.customerInfo?.state || 'N/A'}</Typography>
-                  </div>
-                </div>
-              </div>
+              {/* Product Information */}
+              <Box sx={{ borderTop: '1px solid #e5e7eb', pt: 3 }}>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Product Information
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Description</Typography>
+                    <Typography variant="body2">{selectedShipment.productInfo?.description || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Quantity</Typography>
+                    <Typography variant="body2">{selectedShipment.productInfo?.quantity || 'N/A'}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Value</Typography>
+                    <Typography variant="body2">₹{selectedShipment.productInfo?.value || 'N/A'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
 
-              <Divider />
-
-              <div>
-                <Typography variant="h6" gutterBottom>Product Information</Typography>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Description</Typography>
-                    <Typography>{selectedShipment.productInfo?.description || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Quantity</Typography>
-                    <Typography>{selectedShipment.productInfo?.quantity || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16">
-                    <Typography variant="body2" color="text.secondary">Value</Typography>
-                    <Typography>${selectedShipment.productInfo?.value || 'N/A'}</Typography>
-                  </div>
-                  <div className="min-h-16"></div>
-                </div>
-              </div>
-
-              <Divider />
-
-              <div>
-                <Typography variant="h6" gutterBottom>Shipment Timeline</Typography>
+              {/* Timeline */}
+              <Box sx={{ borderTop: '1px solid #e5e7eb', pt: 3 }}>
+                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  Shipment Timeline
+                </Typography>
                 <ShipmentTimeline statusHistory={selectedShipment.statusHistory} />
-              </div>
+              </Box>
 
-              <Divider />
-
-              <div>
-                <Typography variant="h6" gutterBottom>Order Notes</Typography>
-                <Typography>{selectedShipment.orderNotes || 'No notes available'}</Typography>
-              </div>
-            </div>
+              {/* Order Notes */}
+              {selectedShipment.orderNotes && (
+                <Box sx={{ borderTop: '1px solid #e5e7eb', pt: 3 }}>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Order Notes
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedShipment.orderNotes}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailsDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </div>
+    </Box>
   );
 };
 
