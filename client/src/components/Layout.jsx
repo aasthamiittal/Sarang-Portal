@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import Dashboard from '../pages/Dashboard';
-import Shipments from '../pages/Shipments';
-import MultiBox from '../pages/MultiBox';
-import Manifests from '../pages/Manifests';
-import Pickup from '../pages/Pickup';
-import RateComparison from '../pages/RateComparison';
-import BulkReport from '../pages/BulkReport';
-import Billing from '../pages/Billing';
-import Documents from '../pages/Documents';
-import Integrations from '../pages/Integrations';
-import RequestQuote from '../pages/RequestQuote';
-import Profile from '../pages/Profile';
-import Admin from '../pages/Admin';
+import Dashboard from '../views/Dashboard';
+import Shipments from '../views/Shipments';
+import MultiBox from '../views/MultiBox';
+import Manifests from '../views/Manifests';
+import Pickup from '../views/Pickup';
+import RateComparison from '../views/RateComparison';
+import BulkReport from '../views/BulkReport';
+import Billing from '../views/Billing';
+import Documents from '../views/Documents';
+import Integrations from '../views/Integrations';
+import RequestQuote from '../views/RequestQuote';
+import Profile from '../views/Profile';
+import Admin from '../views/Admin';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

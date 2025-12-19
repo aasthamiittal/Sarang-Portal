@@ -202,20 +202,37 @@ const Shipments = () => {
         />
       ),
     },
-    { 
-      field: 'lastMile', 
-      headerName: 'Delivery', 
+    {
+      field: 'lastMile',
+      headerName: 'Delivery',
       flex: 0.7,
       minWidth: 90,
       renderCell: (params) => (
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-          {params.row.deliveryDate 
-            ? 'Delivered' 
-            : params.row.dispatchDate 
-            ? 'Dispatched' 
+          {params.row.deliveryDate
+            ? 'Delivered'
+            : params.row.dispatchDate
+            ? 'Dispatched'
             : '-'}
         </Typography>
       )
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.5,
+      minWidth: 100,
+      sortable: false,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <IconButton onClick={() => handleViewDetails(params.row)} size="small" title="View Details">
+            <Visibility />
+          </IconButton>
+          <IconButton onClick={() => handleEdit(params.row)} size="small" title="Edit">
+            <Edit />
+          </IconButton>
+        </Box>
+      ),
     },
   ];
 
@@ -351,7 +368,7 @@ const Shipments = () => {
   const handleSubmit = async (formData) => {
     try {
       if (editingShipment) {
-        await axios.put(`http://localhost:5000/api/shipments/${editingShipment.id}`, formData, { headers });
+        await axios.put(`http://localhost:5000/api/shipments/${editingShipment._id}`, formData, { headers });
       } else {
         await axios.post('http://localhost:5000/api/shipments', formData, { headers });
       }
