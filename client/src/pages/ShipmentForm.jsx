@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Typography } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Typography, FormControlLabel, Checkbox } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
@@ -29,6 +29,12 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
       state: ''
     },
     billingSameAsShipping: true,
+    productInfo: {
+      description: '',
+      quantity: '',
+      value: ''
+    },
+    orderNotes: '',
   });
 
   useEffect(() => {
@@ -36,7 +42,8 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
       ...prev,
       ...initialData,
       pickupAddress: { ...prev.pickupAddress, ...initialData.pickupAddress },
-      customerInfo: { ...prev.customerInfo, ...initialData.customerInfo }
+      customerInfo: { ...prev.customerInfo, ...initialData.customerInfo },
+      productInfo: { ...prev.productInfo, ...initialData.productInfo }
     }));
   }, [initialData]);
 
@@ -234,6 +241,56 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+          />
+
+          <Typography variant="h6" style={{ marginTop: 20 }}>Billing Information</Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={formData.billingSameAsShipping}
+                onChange={(e) => setFormData({ ...formData, billingSameAsShipping: e.target.checked })}
+                name="billingSameAsShipping"
+              />
+            }
+            label="Billing address is same as shipping address"
+          />
+
+          <Typography variant="h6" style={{ marginTop: 20 }}>Shipment Information</Typography>
+          <TextField
+            label="Product Description"
+            name="productInfo.description"
+            value={formData.productInfo?.description || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Quantity"
+            name="productInfo.quantity"
+            value={formData.productInfo?.quantity || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            type="number"
+          />
+          <TextField
+            label="Value"
+            name="productInfo.value"
+            value={formData.productInfo?.value || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            type="number"
+          />
+          <TextField
+            label="Order Notes"
+            name="orderNotes"
+            value={formData.orderNotes || ''}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            multiline
+            rows={3}
           />
         </DialogContent>
         <DialogActions>
