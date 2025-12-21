@@ -3,6 +3,18 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import { Link } from 'react-router-dom';
+import {
+  ShoppingCart,
+  Edit,
+  FileText,
+  Package,
+  Send,
+  Archive,
+  Truck,
+  FileCheck,
+  AlertTriangle,
+  Box
+} from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
@@ -13,7 +25,15 @@ const Dashboard = () => {
     draftedOrders: 0,
     pendingForLabel: 0,
     packedOrders: 0,
-    dispatchedOrders: 0
+    dispatchedOrders: 0,
+    awbStockRemaining: 0,
+    creditBalance: 0
+  });
+  const [opsMetrics, setOpsMetrics] = useState({
+    bookingCount: 0,
+    deliveredCount: 0,
+    pendingCount: 0,
+    recentShipments: []
   });
   const [actionsSummary, setActionsSummary] = useState({
     pickupsInProgress: 0,
@@ -32,8 +52,11 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [orderRes, actionsRes, balanceRes, activityRes] = await Promise.all([
+      const [orderRes, opsRes, actionsRes, balanceRes, activityRes] = await Promise.all([
         axios.get(`http://localhost:5000/api/shipments/dashboard-summary?dateFilter=${dateFilter}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`http://localhost:5000/api/shipments/ops-metrics?dateFilter=${dateFilter}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         axios.get(`http://localhost:5000/api/shipments/actions-summary?dateFilter=${dateFilter}`, {
@@ -48,6 +71,7 @@ const Dashboard = () => {
       ]);
 
       setOrderSummary(orderRes.data);
+      setOpsMetrics(opsRes.data);
       setActionsSummary(actionsRes.data);
       setWalletBalance(balanceRes.data.balance);
       setWalletActivity(activityRes.data);
@@ -56,148 +80,191 @@ const Dashboard = () => {
     }
   };
 
-  const OrderSummaryCard = ({ title, value, link, color }) => (
+  const OrderSummaryCard = ({ title, value, link, icon: Icon }) => (
     <Link to={link}>
-      <div className={`bg-white p-6 rounded-lg shadow-md border-l-4 ${color} hover:shadow-lg transition-shadow cursor-pointer h-28`}>
-        <h3 className="text-sm font-semibold text-gray-700 whitespace-normal">{title}</h3>
-        <p className="text-3xl font-bold text-gray-900">{value}</p>
+      <div className="bg-blue-100 p-5 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="text-sm font-medium text-gray-800 leading-tight">{title}</h3>
+          <Icon className="w-8 h-8 text-blue-400" strokeWidth={1.5} />
+        </div>
+        <p className="text-4xl font-bold text-gray-900">{value}</p>
       </div>
     </Link>
   );
 
-  const ActionCard = ({ title, value, icon, color }) => (
-    <div className={`bg-white p-4 rounded-lg shadow-md border-l-4 ${color} h-20`}>
+  const ActionCard = ({ title, value, icon, showProgress = false }) => (
+    <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 mb-3">
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+        <div className="flex-1">
+          <h3 className="text-sm font-medium text-gray-800 mb-1">{title}</h3>
+          <div className="flex items-center gap-3">
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            {showProgress && (
+              <div className="flex-1 h-2 bg-gray-200 rounded-full max-w-[120px]">
+                <div className="h-2 bg-blue-500 rounded-full" style={{ width: '60%' }}></div>
+              </div>
+            )}
+          </div>
         </div>
-        <div className={`text-3xl ${color.replace('border-', 'text-')}`}>{icon}</div>
+        <div className="text-4xl ml-3">{icon}</div>
       </div>
     </div>
   );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-        
-        {/* Date Filters */}
-        <div className="flex flex-wrap gap-2">
-          {['today', 'yesterday', 'last7days', 'last30days', 'custom'].map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setDateFilter(filter)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                dateFilter === filter
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {filter === 'last7days' ? 'Last 7 days' :
-               filter === 'last30days' ? 'Last 30 days' :
-               filter === 'custom' ? 'Custom range' :
-               filter.charAt(0).toUpperCase() + filter.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Order Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <OrderSummaryCard
-          title="All Orders"
-          value={orderSummary.allOrders}
-          link="/shipments"
-          color="border-blue-500"
-        />
-        <OrderSummaryCard
-          title="Drafted Orders"
-          value={orderSummary.draftedOrders}
-          link="/shipments?status=draft"
-          color="border-blue-500"
-        />
-        <OrderSummaryCard
-          title="Pending for Label"
-          value={orderSummary.pendingForLabel}
-          link="/shipments?status=pending-label"
-          color="border-blue-500"
-        />
-        <OrderSummaryCard
-          title="Packed Orders"
-          value={orderSummary.packedOrders}
-          link="/shipments?status=packed"
-          color="border-blue-500"
-        />
-        <OrderSummaryCard
-          title="Dispatched Orders"
-          value={orderSummary.dispatchedOrders}
-          link="/shipments?status=dispatched"
-          color="border-blue-500"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Actions Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Actions</h2>
-          <div className="space-y-4">
-            <ActionCard
-              title="Pickups in Progress"
-              value={actionsSummary.pickupsInProgress}
-              icon="🚚"
-              color="border-blue-500"
-            />
-            <ActionCard
-              title="Open Manifests"
-              value={actionsSummary.openManifests}
-              icon="📋"
-              color="border-blue-500"
-            />
-            <ActionCard
-              title="Disputed Orders"
-              value={actionsSummary.disputedOrders}
-              icon="⚠️"
-              color="border-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Wallet Activity */}
-        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Wallet</h2>
-            <span className="text-2xl font-bold text-green-600">${walletBalance.toFixed(2)}</span>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Recent Activity</h3>
-            {walletActivity.slice(0, 5).map((activity, index) => (
-              <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
-                <div>
-                  <p className="text-sm text-gray-600">{activity.description}</p>
-                  <p className="text-xs text-gray-400">{new Date(activity.date).toLocaleDateString()}</p>
-                </div>
-                <span className={`text-sm font-medium ${activity.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                  {activity.type === 'credit' ? '+' : '-'}${activity.amount}
-                </span>
-              </div>
+    <div className="bg-gray-50 min-h-screen p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          
+          {/* Date Filters */}
+          <div className="flex flex-wrap gap-2">
+            {['today', 'yesterday', 'last7days', 'last30days', 'custom'].map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setDateFilter(filter)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+                  dateFilter === filter
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {filter === 'last7days' ? 'Last 7 days' :
+                 filter === 'last30days' ? 'Last 30 days' :
+                 filter === 'custom' ? 'Custom range' :
+                 filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Placeholder for additional content */}
-        <div className="bg-white p-6 rounded-lg shadow-md min-h-64">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Quick Actions</h2>
-          <div className="space-y-2">
-            <Link to="/shipments" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
-              Create New Order
-            </Link>
-            <Link to="/rate-comparison" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
-              Calculate Rates
-            </Link>
-            <Link to="/pickup" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-center hover:bg-blue-700 transition-colors">
-              Request Pickup
-            </Link>
+        {/* Order Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+          <OrderSummaryCard
+            title="All Orders"
+            value={orderSummary.allOrders}
+            link="/shipments"
+            icon={ShoppingCart}
+          />
+          <OrderSummaryCard
+            title="Drafted Orders"
+            value={orderSummary.draftedOrders}
+            link="/shipments?status=draft"
+            icon={Edit}
+          />
+          <OrderSummaryCard
+            title="Pending for Label"
+            value={orderSummary.pendingForLabel}
+            link="/shipments?status=pending-label"
+            icon={FileText}
+          />
+          <OrderSummaryCard
+            title="Packed Orders"
+            value={orderSummary.packedOrders}
+            link="/shipments?status=packed"
+            icon={Package}
+          />
+          <OrderSummaryCard
+            title="Dispatched Orders"
+            value={orderSummary.dispatchedOrders}
+            link="/shipments?status=dispatched"
+            icon={Send}
+          />
+          <OrderSummaryCard
+            title="AWB Stock Remaining"
+            value={orderSummary.awbStockRemaining}
+            link="/awb-stock"
+            icon={Archive}
+          />
+        </div>
+
+        {/* Three Column Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Actions Section */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Actions</h2>
+            <div>
+              <ActionCard
+                title="Pickups in Progress"
+                value={actionsSummary.pickupsInProgress}
+                icon="🚚"
+                showProgress={true}
+              />
+              <ActionCard
+                title="Open Manifests"
+                value={actionsSummary.openManifests}
+                icon="📋"
+              />
+              <ActionCard
+                title="Disputed Orders"
+                value={actionsSummary.disputedOrders}
+                icon="⚠️"
+              />
+            </div>
+          </div>
+
+          {/* Credit Balance & Wallet Activity */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            {/* Credit Balance Header with Blue Background */}
+            <div className="bg-blue-100 -mx-6 -mt-6 p-6 rounded-t-lg mb-6 relative overflow-hidden">
+              <div className="relative z-10">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Credit Balance</h2>
+                <p className="text-4xl font-bold text-gray-900">
+                  ${orderSummary.creditBalance?.toFixed(2) || '0.00'}
+                </p>
+              </div>
+              {/* Decorative elements */}
+              <div className="absolute top-4 right-4 w-20 h-20 bg-blue-200 rounded-full opacity-30"></div>
+              <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-200 rounded-tl-full opacity-20"></div>
+              <svg className="absolute top-6 right-8 w-8 h-8 text-blue-300" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+              </svg>
+            </div>
+
+            {/* Recent Activity */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Recent Activity</h3>
+              <div className="space-y-1">
+                {walletActivity.slice(0, 3).map((activity, index) => (
+                  <div key={index} className="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0">
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800 font-medium">{activity.description}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 ml-4">
+                      ${activity.amount}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Shipments */}
+          <div className="bg-white p-6 rounded-lg shadow-sm">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Recent Shipments</h2>
+            <div className="space-y-2">
+              {opsMetrics.recentShipments?.length > 0 ? (
+                opsMetrics.recentShipments.map((shipment) => (
+                  <div key={shipment.id} className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">{shipment.orderId}</p>
+                      <p className="text-xs text-gray-400">{shipment.carrier} • {shipment.status}</p>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {new Date(shipment.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Box className="w-20 h-20 text-gray-300 mb-4" strokeWidth={1} />
+                  <p className="text-base font-semibold text-gray-900 mb-1">Recent Shipments</p>
+                  <p className="text-sm text-gray-500">No recent shipments</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

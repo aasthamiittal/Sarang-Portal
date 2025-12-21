@@ -16,17 +16,18 @@ import {
   Tab,
   InputAdornment
 } from '@mui/material';
-import { 
-  Add, 
-  Edit, 
-  Delete, 
-  Timeline, 
-  CloudUpload, 
-  Search, 
-  Print, 
-  GetApp, 
+import {
+  Add,
+  Edit,
+  Delete,
+  Timeline,
+  CloudUpload,
+  Search,
+  Print,
+  GetApp,
   Visibility,
-  Tune
+  Tune,
+  Receipt
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
@@ -58,7 +59,7 @@ const statusTabs = [
 ];
 
 const Shipments = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -223,16 +224,28 @@ const Shipments = () => {
       flex: 0.5,
       minWidth: 100,
       sortable: false,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={() => handleViewDetails(params.row)} size="small" title="View Details">
-            <Visibility />
-          </IconButton>
-          <IconButton onClick={() => handleEdit(params.row)} size="small" title="Edit">
-            <Edit />
-          </IconButton>
-        </Box>
-      ),
+      renderCell: (params) => {
+        const shipment = params.row;
+        const isLocked = shipment.labelGeneratedAt || shipment.manifestSubmittedAt;
+        const canEdit = !isLocked && ['admin', 'manager', 'staff'].includes(user?.role);
+
+        return (
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton onClick={() => handleViewDetails(params.row)} size="small" title="View Details">
+              <Visibility />
+            </IconButton>
+            <IconButton
+              onClick={() => handleEdit(params.row)}
+              size="small"
+              title={isLocked ? (shipment.labelGeneratedAt ? 'Cannot edit: Label generated' : 'Cannot edit: Manifest submitted') : 'Edit'}
+              disabled={!canEdit}
+              sx={{ opacity: canEdit ? 1 : 0.5 }}
+            >
+              <Edit />
+            </IconButton>
+          </Box>
+        );
+      },
     },
   ];
 
@@ -379,6 +392,42 @@ const Shipments = () => {
     }
   };
 
+  const handleGenerateCustomsInvoice = async (shipmentId) => {
+    try {
+      // For demo purposes, use sample data. In real app, this would open a form
+      const invoiceData = {
+        shipmentId,
+        hsCode: '84713010',
+        declaredValue: 1000,
+        originCountry: 'India',
+        invoiceNumber: `INV-${Date.now()}`,
+        currency: 'USD'
+      };
+
+      const response = await axios.post('http://localhost:5000/api/customs/invoices', invoiceData, { headers });
+      alert('Customs invoice generated successfully');
+
+      // Optionally download the invoice
+      if (window.confirm('Would you like to download the customs invoice?')) {
+        const downloadResponse = await axios.get(`http://localhost:5000/api/customs/invoices/${response.data._id}/download`, {
+          headers,
+          responseType: 'blob'
+        });
+
+        const url = window.URL.createObjectURL(new Blob([downloadResponse.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `customs-invoice-${response.data.invoiceNumber}.txt`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    } catch (error) {
+      console.error('Failed to generate customs invoice:', error);
+      alert('Failed to generate customs invoice: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
     setFilters({ ...filters, status: statusTabs[newValue].value });
@@ -484,7 +533,7 @@ const Shipments = () => {
         flexWrap: 'wrap'
       }}>
         <TextField
-          placeholder="Enter Tracking Id . . ."
+          placeholder="Search by Tracking ID, AWB, Order ID..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           sx={{ 
@@ -719,6 +768,15 @@ const Shipments = () => {
         <DialogContent>
           {selectedShipment && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+              {/* AWB Number */}
+              {selectedShipment.awbNumber && (
+                <Box sx={{ bgcolor: '#f0f9ff', p: 2, borderRadius: 1, border: '1px solid #0ea5e9' }}>
+                  <Typography variant="subtitle2" color="#0ea5e9" fontWeight={600}>
+                    AWB Number: {selectedShipment.awbNumber}
+                  </Typography>
+                </Box>
+              )}
+
               {/* Pickup Address */}
               <Box>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -794,6 +852,26 @@ const Shipments = () => {
                     <Typography variant="body2">₹{selectedShipment.productInfo?.value || 'N/A'}</Typography>
                   </Box>
                 </Box>
+              </Box>
+
+              {/* Customs Invoice */}
+              <Box sx={{ borderTop: '1px solid #e5e7eb', pt: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Customs Invoice
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<Receipt />}
+                    variant="outlined"
+                    onClick={() => handleGenerateCustomsInvoice(selectedShipment._id)}
+                  >
+                    Generate Invoice
+                  </Button>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Generate customs documentation for international shipments
+                </Typography>
               </Box>
 
               {/* Timeline */}

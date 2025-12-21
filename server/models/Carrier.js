@@ -11,6 +11,17 @@ const carrierSchema = new mongoose.Schema({
     fuelSurcharge: { type: Number, default: 0 },
     additionalFees: { type: Number, default: 0 }
   },
+  labelTemplate: {
+    format: { type: String, enum: ['standard', 'thermal', 'pdf'], default: 'standard' },
+    barcodeType: { type: String, enum: ['code128', 'code39', 'qrcode'], default: 'code128' },
+    includeFields: [{ type: String }],
+    customLayout: { type: String }
+  },
+  labelRules: {
+    autoGenerate: { type: Boolean, default: false },
+    requireAWB: { type: Boolean, default: true },
+    maxReprints: { type: Number, default: 3 }
+  },
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

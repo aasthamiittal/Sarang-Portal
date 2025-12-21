@@ -38,6 +38,10 @@ const documentsRoutes = require('./routes/documents');
 const integrationsRoutes = require('./routes/integrations');
 const quotesRoutes = require('./routes/quotes');
 const walletRoutes = require('./routes/wallet');
+const awbRoutes = require('./routes/awb');
+const customsRoutes = require('./routes/customs');
+const ledgerRoutes = require('./routes/ledger');
+const automationRoutes = require('./routes/automation');
 
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/manifests', manifestRoutes);
@@ -51,6 +55,10 @@ app.use('/api/documents', documentsRoutes);
 app.use('/api/integration', integrationsRoutes);
 app.use('/api/quotes', quotesRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/awb', awbRoutes);
+app.use('/api/customs', customsRoutes);
+app.use('/api/ledger', ledgerRoutes);
+app.use('/api/automation', automationRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 5000;

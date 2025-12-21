@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip } from '@mui/material';
-import { AccountBalanceWallet, Add, CreditCard } from '@mui/icons-material';
+import { Button, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip, Tabs, Tab, Box } from '@mui/material';
+import { AccountBalanceWallet, Add, CreditCard, Assessment, GetApp } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
@@ -11,11 +11,20 @@ const Billing = () => {
   const [rechargeDialogOpen, setRechargeDialogOpen] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [filter, setFilter] = useState('all');
+  const [reportTab, setReportTab] = useState(0);
+  const [reportsData, setReportsData] = useState({
+    ledger: [],
+    invoiceSummary: {},
+    dailyBooking: [],
+    shipmentStatus: [],
+    courierWise: []
+  });
 
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
     fetchWalletData();
+    fetchReportsData();
   }, [token]);
 
   const fetchWalletData = async () => {
@@ -28,6 +37,28 @@ const Billing = () => {
       setWalletActivity(activityRes.data);
     } catch (error) {
       console.error('Failed to fetch wallet data:', error);
+    }
+  };
+
+  const fetchReportsData = async () => {
+    try {
+      const [ledgerRes, invoiceRes, dailyRes, statusRes, courierRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/ledger/report', { headers }),
+        axios.get('http://localhost:5000/api/ledger/invoice-summary', { headers }),
+        axios.get('http://localhost:5000/api/reports/daily-booking', { headers }),
+        axios.get('http://localhost:5000/api/reports/shipment-status', { headers }),
+        axios.get('http://localhost:5000/api/reports/courier-wise', { headers })
+      ]);
+
+      setReportsData({
+        ledger: ledgerRes.data,
+        invoiceSummary: invoiceRes.data,
+        dailyBooking: dailyRes.data,
+        shipmentStatus: statusRes.data,
+        courierWise: courierRes.data
+      });
+    } catch (error) {
+      console.error('Failed to fetch reports data:', error);
     }
   };
 
@@ -128,6 +159,151 @@ const Billing = () => {
               </TableBody>
             </Table>
           </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Reports Section */}
+      <Card className="mt-6">
+        <CardContent>
+          <div className="flex items-center mb-4">
+            <Assessment className="mr-2" />
+            <Typography variant="h6">Reports</Typography>
+          </div>
+
+          <Tabs value={reportTab} onChange={(e, newValue) => setReportTab(newValue)} className="mb-4">
+            <Tab label="Ledger" />
+            <Tab label="Invoice Summary" />
+            <Tab label="Daily Booking" />
+            <Tab label="Shipment Status" />
+            <Tab label="Courier-wise" />
+          </Tabs>
+
+          {reportTab === 0 && (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Amount</TableCell>
+                    <TableCell>Description</TableCell>
+                    <TableCell>Date</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportsData.ledger.slice(0, 10).map((entry, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Chip label={entry.type} color={entry.type === 'credit' ? 'success' : 'error'} size="small" />
+                      </TableCell>
+                      <TableCell>${entry.amount}</TableCell>
+                      <TableCell>{entry.description || 'N/A'}</TableCell>
+                      <TableCell>{new Date(entry.createdAt).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {reportTab === 1 && (
+            <Box className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="p-4">
+                <Typography variant="h6">{reportsData.invoiceSummary.totalInvoices || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Total Invoices</Typography>
+              </Card>
+              <Card className="p-4">
+                <Typography variant="h6">{reportsData.invoiceSummary.paidInvoices || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Paid</Typography>
+              </Card>
+              <Card className="p-4">
+                <Typography variant="h6">{reportsData.invoiceSummary.pendingInvoices || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Pending</Typography>
+              </Card>
+              <Card className="p-4">
+                <Typography variant="h6">${reportsData.invoiceSummary.totalAmount || 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Total Amount</Typography>
+              </Card>
+            </Box>
+          )}
+
+          {reportTab === 2 && (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Bookings</TableCell>
+                    <TableCell>Total Weight</TableCell>
+                    <TableCell>Total Cost</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportsData.dailyBooking.map((day, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{day.date}</TableCell>
+                      <TableCell>{day.bookings}</TableCell>
+                      <TableCell>{day.totalWeight}kg</TableCell>
+                      <TableCell>${day.totalCost}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {reportTab === 3 && (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Count</TableCell>
+                    <TableCell>Total Cost</TableCell>
+                    <TableCell>Avg Weight</TableCell>
+                    <TableCell>Avg Cost</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportsData.shipmentStatus.map((status, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{status.status}</TableCell>
+                      <TableCell>{status.count}</TableCell>
+                      <TableCell>${status.totalCost}</TableCell>
+                      <TableCell>{status.avgWeight}kg</TableCell>
+                      <TableCell>${status.avgCost}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {reportTab === 4 && (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Courier</TableCell>
+                    <TableCell>Total Shipments</TableCell>
+                    <TableCell>Delivered</TableCell>
+                    <TableCell>Delivery Rate</TableCell>
+                    <TableCell>Total Cost</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reportsData.courierWise.map((courier, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{courier.courier}</TableCell>
+                      <TableCell>{courier.totalShipments}</TableCell>
+                      <TableCell>{courier.delivered}</TableCell>
+                      <TableCell>{courier.deliveryRate}%</TableCell>
+                      <TableCell>${courier.totalCost}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 

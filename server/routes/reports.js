@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Shipment = require('../models/Shipment');
+const Carrier = require('../models/Carrier');
+const Manifest = require('../models/Manifest');
 
 router.use(auth);
 
@@ -177,6 +179,157 @@ router.get('/shipments/export', async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /daily-booking - Daily booking report
+router.get('/daily-booking', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const match = { user: req.user._id };
+
+    if (startDate || endDate) {
+      match.createdAt = {};
+      if (startDate) match.createdAt.$gte = new Date(startDate);
+      if (endDate) match.createdAt.$lte = new Date(endDate);
+    }
+
+    const report = await Shipment.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          bookings: { $sum: 1 },
+          totalWeight: { $sum: '$weight' },
+          totalCost: { $sum: '$cost' },
+          carriers: { $addToSet: '$carrier' }
+        }
+      },
+      {
+        $project: {
+          date: '$_id',
+          bookings: 1,
+          totalWeight: 1,
+          totalCost: 1,
+          uniqueCarriers: { $size: '$carriers' },
+          _id: 0
+        }
+      },
+      { $sort: { date: -1 } }
+    ]);
+
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET /shipment-status - Shipment status report
+router.get('/shipment-status', async (req, res) => {
+  try {
+    const { startDate, endDate, carrier, status } = req.query;
+    const match = { user: req.user._id };
+
+    if (startDate || endDate) {
+      match.createdAt = {};
+      if (startDate) match.createdAt.$gte = new Date(startDate);
+      if (endDate) match.createdAt.$lte = new Date(endDate);
+    }
+
+    if (carrier) match.carrier = carrier;
+    if (status) match.status = status;
+
+    const report = await Shipment.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalCost: { $sum: '$cost' },
+          totalWeight: { $sum: '$weight' },
+          avgWeight: { $avg: '$weight' },
+          avgCost: { $avg: '$cost' }
+        }
+      },
+      {
+        $project: {
+          status: '$_id',
+          count: 1,
+          totalCost: 1,
+          totalWeight: 1,
+          avgWeight: { $round: ['$avgWeight', 2] },
+          avgCost: { $round: ['$avgCost', 2] },
+          _id: 0
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET /courier-wise - Courier-wise aggregation report
+router.get('/courier-wise', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const match = { user: req.user._id };
+
+    if (startDate || endDate) {
+      match.createdAt = {};
+      if (startDate) match.createdAt.$gte = new Date(startDate);
+      if (endDate) match.createdAt.$lte = new Date(endDate);
+    }
+
+    const report = await Shipment.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$carrier',
+          totalShipments: { $sum: 1 },
+          totalCost: { $sum: '$cost' },
+          totalWeight: { $sum: '$weight' },
+          delivered: {
+            $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] }
+          },
+          inTransit: {
+            $sum: { $cond: [{ $eq: ['$status', 'in-transit'] }, 1, 0] }
+          },
+          pending: {
+            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+          },
+          cancelled: {
+            $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $project: {
+          courier: '$_id',
+          totalShipments: 1,
+          totalCost: 1,
+          totalWeight: 1,
+          delivered: 1,
+          inTransit: 1,
+          pending: 1,
+          cancelled: 1,
+          deliveryRate: {
+            $round: [
+              { $multiply: [{ $divide: ['$delivered', '$totalShipments'] }, 100] },
+              2
+            ]
+          },
+          _id: 0
+        }
+      },
+      { $sort: { totalShipments: -1 } }
+    ]);
+
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

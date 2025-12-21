@@ -26,6 +26,11 @@ const Profile = () => {
       email: true,
       sms: false,
       inApp: true
+    },
+    automation: {
+      courierSelectionEnabled: false,
+      labelGenerationEnabled: false,
+      manifestGroupingEnabled: false
     }
   });
   const [kycDialogOpen, setKycDialogOpen] = useState(false);
@@ -59,10 +64,18 @@ const Profile = () => {
   const handleSettingsChange = (e) => {
     const { name, value, checked, type } = e.target;
     if (type === 'checkbox') {
-      setSettingsData({
-        ...settingsData,
-        notifications: { ...settingsData.notifications, [name]: checked }
-      });
+      if (name.startsWith('automation-')) {
+        const automationKey = name.replace('automation-', '');
+        setSettingsData({
+          ...settingsData,
+          automation: { ...settingsData.automation, [automationKey]: checked }
+        });
+      } else {
+        setSettingsData({
+          ...settingsData,
+          notifications: { ...settingsData.notifications, [name]: checked }
+        });
+      }
     } else {
       setSettingsData({ ...settingsData, [name]: value });
     }
@@ -335,6 +348,42 @@ const Profile = () => {
                       />
                     }
                     label="In-App Notifications"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" gutterBottom>Automation Settings</Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Enable automated workflows to streamline your shipping operations.
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settingsData.automation?.courierSelectionEnabled || false}
+                        onChange={handleSettingsChange}
+                        name="automation-courierSelectionEnabled"
+                      />
+                    }
+                    label="Auto Courier Selection"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settingsData.automation?.labelGenerationEnabled || false}
+                        onChange={handleSettingsChange}
+                        name="automation-labelGenerationEnabled"
+                      />
+                    }
+                    label="Auto Label Generation"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settingsData.automation?.manifestGroupingEnabled || false}
+                        onChange={handleSettingsChange}
+                        name="automation-manifestGroupingEnabled"
+                      />
+                    }
+                    label="Auto Manifest Grouping"
                   />
                 </Grid>
                 <Grid item xs={12}>

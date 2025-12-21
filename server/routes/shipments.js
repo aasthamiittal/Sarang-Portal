@@ -5,6 +5,8 @@ const Shipment = require('../models/Shipment');
 const Billing = require('../models/Billing');
 const Carrier = require('../models/Carrier');
 const Rate = require('../models/Rate');
+const AwbStock = require('../models/AwbStock');
+const AccountLedger = require('../models/AccountLedger');
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const csv = require('csv-parser');
@@ -14,64 +16,11 @@ const upload = multer({ dest: 'uploads/' });
 
 router.use(auth);
 
-// GET /dashboard-summary - Get order summary for dashboard
-router.get('/dashboard-summary', async (req, res) => {
-  try {
-    const { dateFilter } = req.query;
-    const query = { user: req.user.id };
-
-    // Apply date filter
-    if (dateFilter) {
-      const now = new Date();
-      let startDate;
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case 'yesterday':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
-          break;
-        case 'last7days':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-        case 'last30days':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-        default:
-          // custom range or no filter
-          break;
-      }
-
-      if (dateFilter === 'today') {
-        query.createdAt = { $gte: startDate };
-      }
-    }
-
-    const shipments = await Shipment.find(query);
-
-    const summary = {
-      allOrders: shipments.length,
-      draftedOrders: shipments.filter(s => s.status === 'draft').length,
-      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
-      packedOrders: shipments.filter(s => s.status === 'packed').length,
-      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length
-    };
-
-    res.json(summary);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // GET /actions-summary - Get actions summary for dashboard
 router.get('/actions-summary', async (req, res) => {
   try {
     const { dateFilter } = req.query;
-    const query = { user: req.user.id };
+    const query = { user: req.user._id };
 
     // Apply date filter similar to above
     if (dateFilter) {
@@ -114,43 +63,11 @@ router.get('/actions-summary', async (req, res) => {
   }
 });
 
-// GET /export - Export shipments to CSV
-router.get('/export', async (req, res) => {
-  try {
-    const { status, carrier, startDate, endDate } = req.query;
-    const query = { user: req.user.id };
-
-    if (status) query.status = status;
-    if (carrier) query.carrier = new RegExp(carrier, 'i');
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
-
-    // Create CSV content
-    const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
-    const csvRows = shipments.map(shipment =>
-      `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
-    ).join('\n');
-
-    const csvContent = csvHeaders + csvRows;
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
-    res.send(csvContent);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // GET / - Retrieve all shipments for the authenticated user with filters
 router.get('/', async (req, res) => {
   try {
     const { status, carrier, origin, destination, startDate, endDate, search, page = 1, limit = 10 } = req.query;
-    const query = { user: req.user.id };
+    const query = { user: req.user._id };
 
     if (status) query.status = status;
     if (carrier) query.carrier = new RegExp(carrier, 'i');
@@ -164,6 +81,8 @@ router.get('/', async (req, res) => {
     if (search) {
       query.$or = [
         { trackingNumber: new RegExp(search, 'i') },
+        { awbNumber: new RegExp(search, 'i') },
+        { orderId: new RegExp(search, 'i') },
         { origin: new RegExp(search, 'i') },
         { destination: new RegExp(search, 'i') },
         { carrier: new RegExp(search, 'i') }
@@ -213,7 +132,7 @@ router.post('/', async (req, res) => {
       orderNotes,
       pickupAddress,
       billingSameAsShipping,
-      user: req.user.id,
+      user: req.user._id,
       statusHistory: [{ status: initialStatus, note: 'Order created' }]
     });
     await shipment.save();
@@ -232,10 +151,142 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /dashboard-summary - Get order summary for dashboard
+router.get('/dashboard-summary', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user._id };
+
+    // Apply date filter
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        default:
+          // custom range or no filter
+          break;
+      }
+
+      if (dateFilter === 'today') {
+        query.createdAt = { $gte: startDate };
+      }
+    }
+
+    const shipments = await Shipment.find(query);
+
+    // Get AWB stock count
+    const carriers = await Carrier.find({ isActive: true });
+    const awbStockPromises = carriers.map(carrier =>
+      AwbStock.countDocuments({ courierId: carrier._id, status: 'available' })
+    );
+    const awbCounts = await Promise.all(awbStockPromises);
+    const totalAwbStock = awbCounts.reduce((sum, count) => sum + count, 0);
+
+    // Get credit balance
+    const ledgerEntries = await AccountLedger.find({ user: req.user._id }).sort({ createdAt: 1 });
+    let creditBalance = 0;
+    ledgerEntries.forEach(entry => {
+      if (entry.type === 'credit') {
+        creditBalance += entry.amount;
+      } else {
+        creditBalance -= entry.amount;
+      }
+    });
+
+    const summary = {
+      allOrders: shipments.length,
+      draftedOrders: shipments.filter(s => s.status === 'draft').length,
+      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
+      packedOrders: shipments.filter(s => s.status === 'packed').length,
+      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length,
+      awbStockRemaining: totalAwbStock,
+      creditBalance: creditBalance
+    };
+
+    res.json(summary);
+  } catch (error) {
+    console.error('Error in dashboard-summary:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// GET /ops-metrics - Get ops-focused dashboard metrics
+router.get('/ops-metrics', async (req, res) => {
+  try {
+    const { dateFilter } = req.query;
+    const query = { user: req.user._id };
+
+    // Apply date filter similar to dashboard-summary
+    if (dateFilter) {
+      const now = new Date();
+      let startDate;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'yesterday':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+          break;
+        case 'last7days':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+        case 'last30days':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          query.createdAt = { $gte: startDate };
+          break;
+      }
+    }
+
+    const shipments = await Shipment.find(query);
+
+    const metrics = {
+      bookingCount: shipments.length,
+      deliveredCount: shipments.filter(s => s.status === 'delivered').length,
+      pendingCount: shipments.filter(s => ['draft', 'pending-label', 'packed'].includes(s.status)).length,
+      recentShipments: shipments
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 5)
+        .map(s => ({
+          id: s._id.toString(),
+          orderId: s.orderId,
+          trackingNumber: s.trackingNumber,
+          status: s.status,
+          carrier: s.carrier,
+          createdAt: s.createdAt
+        }))
+    };
+
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error in ops-metrics:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // GET /:id - Retrieve a specific shipment by ID
 router.get('/:id', async (req, res) => {
   try {
-    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user.id });
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
     }
@@ -248,9 +299,17 @@ router.get('/:id', async (req, res) => {
 // PUT /:id - Update a shipment by ID
 router.put('/:id', async (req, res) => {
   try {
-    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user.id });
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
+    }
+
+    // Check if shipment is locked (label generated or manifest submitted)
+    if (shipment.labelGeneratedAt || shipment.manifestSubmittedAt) {
+      return res.status(400).json({
+        message: 'Cannot edit shipment after label generation or manifest submission',
+        lockReason: shipment.labelGeneratedAt ? 'Label already generated' : 'Manifest already submitted'
+      });
     }
 
     const oldStatus = shipment.status;
@@ -274,7 +333,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /:id - Delete a shipment by ID
 router.delete('/:id', async (req, res) => {
   try {
-    const shipment = await Shipment.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const shipment = await Shipment.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
     }
@@ -316,7 +375,7 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
           weight: parseFloat(data.weight),
           cost,
           status,
-          user: req.user.id,
+          user: req.user._id,
           statusHistory: [{ status, note: 'Bulk uploaded' }]
         });
       })
@@ -350,111 +409,13 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
   }
 });
 
-// GET /dashboard-summary - Get order summary for dashboard
-router.get('/dashboard-summary', async (req, res) => {
-  try {
-    const { dateFilter } = req.query;
-    const query = { user: req.user.id };
 
-    // Apply date filter
-    if (dateFilter) {
-      const now = new Date();
-      let startDate;
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case 'yesterday':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
-          break;
-        case 'last7days':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-        case 'last30days':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-        default:
-          // custom range or no filter
-          break;
-      }
-
-      if (dateFilter === 'today') {
-        query.createdAt = { $gte: startDate };
-      }
-    }
-
-    const shipments = await Shipment.find(query);
-
-    const summary = {
-      allOrders: shipments.length,
-      draftedOrders: shipments.filter(s => s.status === 'draft').length,
-      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
-      packedOrders: shipments.filter(s => s.status === 'packed').length,
-      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length
-    };
-
-    res.json(summary);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// GET /actions-summary - Get actions summary for dashboard
-router.get('/actions-summary', async (req, res) => {
-  try {
-    const { dateFilter } = req.query;
-    const query = { user: req.user.id };
-
-    // Apply date filter similar to above
-    if (dateFilter) {
-      const now = new Date();
-      let startDate;
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case 'yesterday':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          query.createdAt = { $gte: startDate, $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
-          break;
-        case 'last7days':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-        case 'last30days':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          query.createdAt = { $gte: startDate };
-          break;
-      }
-
-      if (dateFilter === 'today') {
-        query.createdAt = { $gte: startDate };
-      }
-    }
-
-    // Mock data - in real app, these would come from actual models
-    const summary = {
-      pickupsInProgress: Math.floor(Math.random() * 5), // Mock
-      openManifests: Math.floor(Math.random() * 3), // Mock
-      disputedOrders: Math.floor(Math.random() * 2) // Mock
-    };
-
-    res.json(summary);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 // GET /export - Export shipments to CSV
 router.get('/export', async (req, res) => {
   try {
     const { status, carrier, startDate, endDate } = req.query;
-    const query = { user: req.user.id };
+    const query = { user: req.user._id };
 
     if (status) query.status = status;
     if (carrier) query.carrier = new RegExp(carrier, 'i');
@@ -485,7 +446,7 @@ router.get('/export', async (req, res) => {
 // GET /:id/label - Generate AWB label
 router.get('/:id/label', async (req, res) => {
   try {
-    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user.id });
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
     }

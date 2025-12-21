@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const shipmentSchema = new mongoose.Schema({
   orderId: { type: String, unique: true },
   trackingNumber: { type: String, required: true, unique: true },
+  awbNumber: { type: String },
   status: { type: String, enum: ['draft', 'pending-label', 'packed', 'dispatched', 'in-transit', 'delivered', 'cancelled'], default: 'draft' },
   origin: { type: String, required: true },
   destination: { type: String, required: true },
@@ -42,6 +43,8 @@ const shipmentSchema = new mongoose.Schema({
   zone: { type: String },
   externalTrackingId: { type: String },
   archived: { type: Boolean, default: false },
+  labelGeneratedAt: { type: Date },
+  manifestSubmittedAt: { type: Date },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   statusHistory: [{
     status: { type: String, enum: ['draft', 'pending-label', 'packed', 'dispatched', 'in-transit', 'delivered', 'cancelled'] },

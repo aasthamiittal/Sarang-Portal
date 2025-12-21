@@ -1,21 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import { Button, TextField, MenuItem, Card, CardContent } from '@mui/material';
-import { CloudUpload, Visibility, Delete, Add } from '@mui/icons-material';
+import { Button, TextField, MenuItem, Card, CardContent, Chip } from '@mui/material';
+import { CloudUpload, Visibility, Delete, Add, Edit, Send, Lock } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'draft': return 'default';
+    case 'edited': return 'warning';
+    case 'submitted': return 'info';
+    case 'locked': return 'success';
+    default: return 'default';
+  }
+};
+
 const columns = [
-  { field: 'fileName', headerName: 'File Name', minWidth: 250 },
-  { field: 'uploadedAt', headerName: 'Uploaded At', minWidth: 180, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
+  { field: 'fileName', headerName: 'File Name', minWidth: 200 },
+  {
+    field: 'status',
+    headerName: 'Status',
+    minWidth: 120,
+    renderCell: (params) => (
+      <Chip
+        label={params.value?.replace('-', ' ')}
+        color={getStatusColor(params.value)}
+        size="small"
+        sx={{ textTransform: 'capitalize' }}
+      />
+    ),
+  },
+  {
+    field: 'shipment',
+    headerName: 'Shipment',
+    minWidth: 150,
+    valueGetter: (params) => params.row.shipment?.orderId || 'N/A'
+  },
+  { field: 'uploadedAt', headerName: 'Uploaded At', minWidth: 150, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
   {
     field: 'actions',
     headerName: 'Actions',
-    minWidth: 150,
+    minWidth: 250,
     renderCell: (params) => (
       <div className="flex space-x-1">
         <Button size="small" startIcon={<Visibility />} onClick={() => params.api.handleView(params.row)}>View</Button>
-        <Button size="small" color="error" startIcon={<Delete />} onClick={() => params.api.handleDelete(params.row.id)}>Delete</Button>
+        {params.row.status !== 'locked' && (
+          <>
+            {params.row.status === 'draft' && (
+              <Button size="small" startIcon={<Edit />} color="primary" onClick={() => params.api.handleEdit(params.row)}>Edit</Button>
+            )}
+            {(params.row.status === 'draft' || params.row.status === 'edited') && (
+              <Button size="small" startIcon={<Send />} color="secondary" onClick={() => params.api.handleManifestSubmit(params.row._id)}>Submit</Button>
+            )}
+            {params.row.status === 'submitted' && (
+              <Button size="small" startIcon={<Lock />} color="success" onClick={() => params.api.handleManifestLock(params.row._id)}>Lock</Button>
+            )}
+          </>
+        )}
+        <Button size="small" color="error" startIcon={<Delete />} onClick={() => params.api.handleDelete(params.row._id)}>Delete</Button>
       </div>
     ),
   },
@@ -101,6 +143,37 @@ const Manifests = () => {
     }
   };
 
+  const handleEdit = (manifest) => {
+    // For now, just show an alert. In a full implementation, this would open an edit form
+    alert('Edit functionality would open a form to modify manifest details');
+  };
+
+  const handleManifestSubmit = async (id) => {
+    if (window.confirm('Are you sure you want to submit this manifest? This will lock shipments for editing.')) {
+      try {
+        await axios.post(`http://localhost:5000/api/manifests/${id}/submit`, {}, { headers });
+        fetchManifests();
+        alert('Manifest submitted successfully');
+      } catch (error) {
+        console.error('Failed to submit manifest:', error);
+        alert('Failed to submit manifest: ' + (error.response?.data?.message || error.message));
+      }
+    }
+  };
+
+  const handleManifestLock = async (id) => {
+    if (window.confirm('Are you sure you want to lock this manifest? This is the final step.')) {
+      try {
+        await axios.post(`http://localhost:5000/api/manifests/${id}/lock`, {}, { headers });
+        fetchManifests();
+        alert('Manifest locked successfully');
+      } catch (error) {
+        console.error('Failed to lock manifest:', error);
+        alert('Failed to lock manifest: ' + (error.response?.data?.message || error.message));
+      }
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -153,6 +226,19 @@ const Manifests = () => {
               columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
                 <div className="flex space-x-1">
                   <Button size="small" startIcon={<Visibility />} onClick={() => handleView(params.row)}>View</Button>
+                  {params.row.status !== 'locked' && (
+                    <>
+                      {params.row.status === 'draft' && (
+                        <Button size="small" startIcon={<Edit />} color="primary" onClick={() => handleEdit(params.row)}>Edit</Button>
+                      )}
+                      {(params.row.status === 'draft' || params.row.status === 'edited') && (
+                        <Button size="small" startIcon={<Send />} color="secondary" onClick={() => handleManifestSubmit(params.row._id)}>Submit</Button>
+                      )}
+                      {params.row.status === 'submitted' && (
+                        <Button size="small" startIcon={<Lock />} color="success" onClick={() => handleManifestLock(params.row._id)}>Lock</Button>
+                      )}
+                    </>
+                  )}
                   <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(params.row._id)}>Delete</Button>
                 </div>
               )} : col)}
