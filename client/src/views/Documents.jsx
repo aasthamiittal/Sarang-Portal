@@ -3,6 +3,7 @@ import { Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRo
 import { CloudUpload, Download, Delete, Description } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const Documents = () => {
   const { token } = useAuth();
@@ -18,7 +19,7 @@ const Documents = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/documents', { headers });
+      const response = await axios.get(`${BASE_API_URL}/documents`, { headers });
       setDocuments(response.data);
     } catch (error) {
       console.error('Failed to fetch documents:', error);
@@ -32,7 +33,7 @@ const Documents = () => {
     formData.append('document', selectedFile);
 
     try {
-      await axios.post('http://localhost:5000/api/documents/upload', formData, {
+      await axios.post(`${BASE_API_URL}/documents/upload`, formData, {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data'
@@ -48,7 +49,7 @@ const Documents = () => {
 
   const handleDownload = async (id, filename) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/documents/${id}/download`, {
+      const response = await axios.get(`${BASE_API_URL}/documents/${id}/download`, {
         headers,
         responseType: 'blob'
       });
@@ -68,7 +69,7 @@ const Documents = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this document?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/documents/${id}`, { headers });
+        await axios.delete(`${BASE_API_URL}/documents/${id}`, { headers });
         fetchDocuments();
       } catch (error) {
         console.error('Failed to delete document:', error);

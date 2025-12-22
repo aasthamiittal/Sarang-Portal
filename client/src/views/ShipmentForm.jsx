@@ -60,10 +60,14 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
-    onClose();
+    try {
+      await onSubmit(formData);
+      onClose();
+    } catch (error) {
+      // Error is handled in the parent component
+    }
   };
 
   return (

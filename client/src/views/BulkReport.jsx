@@ -3,6 +3,7 @@ import { Button, TextField, Table, TableBody, TableCell, TableContainer, TableHe
 import { Download, PictureAsPdf, TableChart } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const BulkReport = () => {
   const { token } = useAuth();
@@ -15,7 +16,7 @@ const BulkReport = () => {
   const fetchReport = async () => {
     try {
       const params = { startDate, endDate };
-      const response = await axios.get('http://localhost:5000/api/reports/shipments', {
+      const response = await axios.get(`${BASE_API_URL}/reports/shipments`, {
         headers,
         params
       });
@@ -28,7 +29,7 @@ const BulkReport = () => {
   const exportReport = async (format) => {
     try {
       const params = { startDate, endDate, format };
-      const response = await axios.get('http://localhost:5000/api/reports/shipments/export', {
+      const response = await axios.get(`${BASE_API_URL}/reports/shipments/export`, {
         headers,
         params,
         responseType: 'blob'

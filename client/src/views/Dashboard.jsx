@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 import { Link } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -53,19 +54,19 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const [orderRes, opsRes, actionsRes, balanceRes, activityRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/shipments/dashboard-summary?dateFilter=${dateFilter}`, {
+        axios.get(`${BASE_API_URL}/shipments/dashboard-summary?dateFilter=${dateFilter}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`http://localhost:5000/api/shipments/ops-metrics?dateFilter=${dateFilter}`, {
+        axios.get(`${BASE_API_URL}/shipments/ops-metrics?dateFilter=${dateFilter}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`http://localhost:5000/api/shipments/actions-summary?dateFilter=${dateFilter}`, {
+        axios.get(`${BASE_API_URL}/shipments/actions-summary?dateFilter=${dateFilter}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get('http://localhost:5000/api/wallet/balance', {
+        axios.get(`${BASE_API_URL}/wallet/balance`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`http://localhost:5000/api/wallet/activity?dateFilter=${dateFilter}`, {
+        axios.get(`${BASE_API_URL}/wallet/activity?dateFilter=${dateFilter}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);

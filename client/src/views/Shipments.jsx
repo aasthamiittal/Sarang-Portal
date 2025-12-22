@@ -33,6 +33,7 @@ import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import ShipmentForm from './ShipmentForm';
 import ShipmentTimeline from '../components/Timeline';
+import { BASE_API_URL } from '../constants';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -227,7 +228,7 @@ const Shipments = () => {
       renderCell: (params) => {
         const shipment = params.row;
         const isLocked = shipment.labelGeneratedAt || shipment.manifestSubmittedAt;
-        const canEdit = !isLocked && ['admin', 'manager', 'staff'].includes(user?.role);
+        const canEdit = !isLocked && ['admin', 'manager', 'staff', 'user'].includes(user?.role);
 
         return (
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -254,11 +255,8 @@ const Shipments = () => {
   }, [token, page, pageSize]);
 
   useEffect(() => {
-    const filterValues = { ...filters, search: searchQuery };
-    if (Object.values(filterValues).some(v => v)) {
-      fetchShipments(1, filterValues);
-      setPage(1);
-    }
+    fetchShipments(1);
+    setPage(1);
   }, [filters, searchQuery]);
 
   const fetchShipments = async (currentPage = page, currentFilters = { ...filters, search: searchQuery }) => {
@@ -269,7 +267,7 @@ const Shipments = () => {
         limit: pageSize,
         ...Object.fromEntries(Object.entries(currentFilters).filter(([_, v]) => v))
       });
-      const response = await axios.get(`http://localhost:5000/api/shipments?${params}`, { headers });
+      const response = await axios.get(`${BASE_API_URL}/shipments?${params}`, { headers });
       setShipments(response.data.shipments);
       setTotal(response.data.total);
     } catch (error) {
@@ -300,7 +298,7 @@ const Shipments = () => {
 
   const handlePrintLabel = async (shipment) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/shipments/${shipment._id}/label`, {
+      const response = await axios.get(`${BASE_API_URL}/shipments/${shipment._id}/label`, {
         headers,
         responseType: 'blob'
       });
@@ -320,7 +318,7 @@ const Shipments = () => {
   const handleExport = async () => {
     try {
       const params = new URLSearchParams({ ...filters, search: searchQuery });
-      const response = await axios.get(`http://localhost:5000/api/shipments/export?${params}`, {
+      const response = await axios.get(`${BASE_API_URL}/shipments/export?${params}`, {
         headers,
         responseType: 'blob'
       });
@@ -351,7 +349,7 @@ const Shipments = () => {
     formData.append('file', selectedFile);
 
     try {
-      await axios.post('http://localhost:5000/api/shipments/bulk', formData, {
+      await axios.post(`${BASE_API_URL}/shipments/bulk`, formData, {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data'
@@ -370,7 +368,7 @@ const Shipments = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this shipment?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/shipments/${id}`, { headers });
+        await axios.delete(`${BASE_API_URL}/shipments/${id}`, { headers });
         fetchShipments();
       } catch (error) {
         console.error('Failed to delete shipment:', error);
@@ -381,9 +379,9 @@ const Shipments = () => {
   const handleSubmit = async (formData) => {
     try {
       if (editingShipment) {
-        await axios.put(`http://localhost:5000/api/shipments/${editingShipment._id}`, formData, { headers });
+        await axios.put(`${BASE_API_URL}/shipments/${editingShipment._id}`, formData, { headers });
       } else {
-        await axios.post('http://localhost:5000/api/shipments', formData, { headers });
+        await axios.post(`${BASE_API_URL}/shipments`, formData, { headers });
       }
       fetchShipments();
       setDialogOpen(false);
@@ -404,12 +402,12 @@ const Shipments = () => {
         currency: 'USD'
       };
 
-      const response = await axios.post('http://localhost:5000/api/customs/invoices', invoiceData, { headers });
+      const response = await axios.post(`${BASE_API_URL}/customs/invoices`, invoiceData, { headers });
       alert('Customs invoice generated successfully');
 
       // Optionally download the invoice
       if (window.confirm('Would you like to download the customs invoice?')) {
-        const downloadResponse = await axios.get(`http://localhost:5000/api/customs/invoices/${response.data._id}/download`, {
+        const downloadResponse = await axios.get(`${BASE_API_URL}/customs/invoices/${response.data._id}/download`, {
           headers,
           responseType: 'blob'
         });
@@ -663,7 +661,7 @@ const Shipments = () => {
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="draft">Draft</MenuItem>
-              <MenuItem value="pending-label">Pending Label</MenuItem>
+              <MenuItem value="pending-label">Ready</MenuItem>
               <MenuItem value="packed">Packed</MenuItem>
               <MenuItem value="dispatched">Dispatched</MenuItem>
               <MenuItem value="in-transit">In Transit</MenuItem>
@@ -694,6 +692,13 @@ const Shipments = () => {
               label="Origin"
               value={filters.origin}
               onChange={(e) => setFilters({ ...filters, origin: e.target.value })}
+              size="small"
+              fullWidth
+            />
+            <TextField
+              label="Destination"
+              value={filters.destination}
+              onChange={(e) => setFilters({ ...filters, destination: e.target.value })}
               size="small"
               fullWidth
             />

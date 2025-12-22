@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TextField, Button, Table, TableHead, TableRow, TableCell, TableBody, MenuItem } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const RateComparison = () => {
   const { token } = useAuth();
@@ -13,9 +14,9 @@ const RateComparison = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const carriersRes = await axios.get('http://localhost:5000/api/carriers', { headers });
+      const carriersRes = await axios.get(`${BASE_API_URL}/carriers`, { headers });
       setCarriers(carriersRes.data);
-      const ratesRes = await axios.get('http://localhost:5000/api/rates', { headers });
+      const ratesRes = await axios.get(`${BASE_API_URL}/rates`, { headers });
       setRates(ratesRes.data);
     };
     fetchData();

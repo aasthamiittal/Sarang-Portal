@@ -3,6 +3,7 @@ import { Button, TextField, Card, CardContent, Typography, Grid, MenuItem } from
 import { Send } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const RequestQuote = () => {
   const { token } = useAuth();
@@ -24,7 +25,7 @@ const RequestQuote = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/quotes', formData, { headers });
+      await axios.post(`${BASE_API_URL}/quotes`, formData, { headers });
       alert('Quote request submitted successfully. Our team will contact you soon.');
       setFormData({
         origin: '',

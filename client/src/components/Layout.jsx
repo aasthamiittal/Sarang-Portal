@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import ErrorBoundary from './ErrorBoundary';
 import Dashboard from '../views/Dashboard';
 import Shipments from '../views/Shipments';
 import MultiBox from '../views/MultiBox';
@@ -35,7 +36,7 @@ const Layout = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/shipments" element={<Shipments />} />
             <Route path="/multi-box" element={<MultiBox />} />
-            <Route path="/manifests" element={<Manifests />} />
+            <Route path="/manifests" element={<ErrorBoundary><Manifests /></ErrorBoundary>} />
             <Route path="/pickup" element={<Pickup />} />
             <Route path="/rate-comparison" element={<RateComparison />} />
             <Route path="/bulk-report" element={<BulkReport />} />

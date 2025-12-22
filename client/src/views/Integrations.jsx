@@ -3,6 +3,7 @@ import { Button, TextField, Card, CardContent, CardActions, Typography, Grid, Sw
 import { ShoppingCart, Store, Webhook, Sync } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const Integrations = () => {
   const { token } = useAuth();
@@ -20,7 +21,7 @@ const Integrations = () => {
 
   const fetchIntegrationStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/integration/status', { headers });
+      const response = await axios.get(`${BASE_API_URL}/integration/status`, { headers });
       setIntegrations(response.data);
     } catch (error) {
       console.error('Failed to fetch integration status:', error);
@@ -29,7 +30,7 @@ const Integrations = () => {
 
   const handleConnectShopify = async () => {
     try {
-      const response = await axios.post('http://localhost:5000/api/integration/shopify/connect', { apiKey }, { headers });
+      const response = await axios.post(`${BASE_API_URL}/integration/shopify/connect`, { apiKey }, { headers });
       alert('Shopify connected successfully');
       fetchIntegrationStatus();
       setApiKeyDialogOpen(false);
@@ -41,7 +42,7 @@ const Integrations = () => {
 
   const handleSetupWebhook = async () => {
     try {
-      await axios.post('http://localhost:5000/api/integration/webhooks', { url: webhookUrl }, { headers });
+      await axios.post(`${BASE_API_URL}/integration/webhooks`, { url: webhookUrl }, { headers });
       alert('Webhook setup successfully');
       fetchIntegrationStatus();
       setWebhookDialogOpen(false);
@@ -53,7 +54,7 @@ const Integrations = () => {
 
   const handleSync = async (platform) => {
     try {
-      await axios.post(`http://localhost:5000/api/integration/${platform}/sync`, {}, { headers });
+      await axios.post(`${BASE_API_URL}/integration/${platform}/sync`, {}, { headers });
       alert('Sync completed successfully');
     } catch (error) {
       console.error('Failed to sync:', error);

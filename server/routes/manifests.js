@@ -157,6 +157,26 @@ router.post('/:id/lock', async (req, res) => {
   }
 });
 
+// GET /:id/download - Download manifest file
+router.get('/:id/download', async (req, res) => {
+  try {
+    const manifest = await Manifest.findById(req.params.id).populate('shipment');
+    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+      return res.status(404).json({ message: 'Manifest not found' });
+    }
+
+    // Check if file exists
+    const fs = require('fs');
+    if (!fs.existsSync(manifest.filePath)) {
+      return res.status(404).json({ message: 'File not found on server' });
+    }
+
+    res.download(manifest.filePath, manifest.fileName);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /:id/report - Manifest report
 router.get('/:id/report', async (req, res) => {
   try {

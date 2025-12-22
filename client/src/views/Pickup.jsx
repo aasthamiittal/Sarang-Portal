@@ -3,6 +3,7 @@ import { Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, M
 import { Add, Timeline } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const Pickup = () => {
   const { token } = useAuth();
@@ -26,7 +27,7 @@ const Pickup = () => {
 
   const fetchPickups = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/pickup', { headers });
+      const response = await axios.get(`${BASE_API_URL}/pickup`, { headers });
       setPickups(response.data);
     } catch (error) {
       console.error('Failed to fetch pickups:', error);
@@ -35,7 +36,7 @@ const Pickup = () => {
 
   const fetchSlots = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/pickup/slots', { headers });
+      const response = await axios.get(`${BASE_API_URL}/pickup/slots`, { headers });
       setSlots(response.data);
     } catch (error) {
       console.error('Failed to fetch slots:', error);
@@ -49,7 +50,7 @@ const Pickup = () => {
 
   const handleSavePickup = async () => {
     try {
-      await axios.post('http://localhost:5000/api/pickup/request', newPickup, { headers });
+      await axios.post(`${BASE_API_URL}/pickup/request`, newPickup, { headers });
       fetchPickups();
       setDialogOpen(false);
     } catch (error) {

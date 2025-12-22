@@ -4,6 +4,7 @@ import { Button, TextField, MenuItem, Card, CardContent, Chip } from '@mui/mater
 import { CloudUpload, Visibility, Delete, Add, Edit, Send, Lock } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -23,7 +24,7 @@ const columns = [
     minWidth: 120,
     renderCell: (params) => (
       <Chip
-        label={params.value?.replace('-', ' ')}
+        label={(params.value || 'unknown').replace('-', ' ')}
         color={getStatusColor(params.value)}
         size="small"
         sx={{ textTransform: 'capitalize' }}
@@ -36,30 +37,33 @@ const columns = [
     minWidth: 150,
     valueGetter: (params) => params.row.shipment?.orderId || 'N/A'
   },
-  { field: 'uploadedAt', headerName: 'Uploaded At', minWidth: 150, valueFormatter: (params) => new Date(params.value).toLocaleDateString() },
+  { field: 'uploadedAt', headerName: 'Uploaded At', minWidth: 150, valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : 'N/A' },
   {
     field: 'actions',
     headerName: 'Actions',
     minWidth: 250,
-    renderCell: (params) => (
-      <div className="flex space-x-1">
-        <Button size="small" startIcon={<Visibility />} onClick={() => params.api.handleView(params.row)}>View</Button>
-        {params.row.status !== 'locked' && (
-          <>
-            {params.row.status === 'draft' && (
-              <Button size="small" startIcon={<Edit />} color="primary" onClick={() => params.api.handleEdit(params.row)}>Edit</Button>
-            )}
-            {(params.row.status === 'draft' || params.row.status === 'edited') && (
-              <Button size="small" startIcon={<Send />} color="secondary" onClick={() => params.api.handleManifestSubmit(params.row._id)}>Submit</Button>
-            )}
-            {params.row.status === 'submitted' && (
-              <Button size="small" startIcon={<Lock />} color="success" onClick={() => params.api.handleManifestLock(params.row._id)}>Lock</Button>
-            )}
-          </>
-        )}
-        <Button size="small" color="error" startIcon={<Delete />} onClick={() => params.api.handleDelete(params.row._id)}>Delete</Button>
-      </div>
-    ),
+    renderCell: (params) => {
+      const manifest = params.row;
+      return (
+        <div className="flex space-x-1">
+          <Button size="small" startIcon={<Visibility />} onClick={() => handleView(manifest)}>View</Button>
+          {manifest.status !== 'locked' && (
+            <>
+              {manifest.status === 'draft' && (
+                <Button size="small" startIcon={<Edit />} color="primary" onClick={() => handleEdit(manifest)}>Edit</Button>
+              )}
+              {(manifest.status === 'draft' || manifest.status === 'edited') && (
+                <Button size="small" startIcon={<Send />} color="secondary" onClick={() => handleManifestSubmit(manifest._id)}>Submit</Button>
+              )}
+              {manifest.status === 'submitted' && (
+                <Button size="small" startIcon={<Lock />} color="success" onClick={() => handleManifestLock(manifest._id)}>Lock</Button>
+              )}
+            </>
+          )}
+          <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(manifest._id)}>Delete</Button>
+        </div>
+      );
+    },
   },
 ];
 
@@ -82,7 +86,7 @@ const Manifests = () => {
   const fetchManifests = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/manifests', { headers });
+      const response = await axios.get(`${BASE_API_URL}/manifests`, { headers });
       setManifests(response.data);
     } catch (error) {
       console.error('Failed to fetch manifests:', error);
@@ -92,8 +96,8 @@ const Manifests = () => {
 
   const fetchShipments = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/shipments', { headers });
-      setShipments(response.data);
+      const response = await axios.get(`${BASE_API_URL}/shipments`, { headers });
+      setShipments(response.data.shipments || []);
     } catch (error) {
       console.error('Failed to fetch shipments:', error);
     }
@@ -113,7 +117,7 @@ const Manifests = () => {
     formData.append('file', selectedFile);
     formData.append('shipment', selectedShipment);
     try {
-      await axios.post('http://localhost:5000/api/manifests', formData, {
+      await axios.post(`${BASE_API_URL}/manifests`, formData, {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data'
@@ -129,13 +133,13 @@ const Manifests = () => {
   };
 
   const handleView = (manifest) => {
-    window.open(`http://localhost:5000/api/manifests/${manifest.id}/download`, '_blank');
+    window.open(`${BASE_API_URL}/manifests/${manifest._id}/download`, '_blank');
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this manifest?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/manifests/${id}`, { headers });
+        await axios.delete(`${BASE_API_URL}/manifests/${id}`, { headers });
         fetchManifests();
       } catch (error) {
         console.error('Failed to delete manifest:', error);
@@ -151,7 +155,7 @@ const Manifests = () => {
   const handleManifestSubmit = async (id) => {
     if (window.confirm('Are you sure you want to submit this manifest? This will lock shipments for editing.')) {
       try {
-        await axios.post(`http://localhost:5000/api/manifests/${id}/submit`, {}, { headers });
+        await axios.post(`${BASE_API_URL}/manifests/${id}/submit`, {}, { headers });
         fetchManifests();
         alert('Manifest submitted successfully');
       } catch (error) {
@@ -164,7 +168,7 @@ const Manifests = () => {
   const handleManifestLock = async (id) => {
     if (window.confirm('Are you sure you want to lock this manifest? This is the final step.')) {
       try {
-        await axios.post(`http://localhost:5000/api/manifests/${id}/lock`, {}, { headers });
+        await axios.post(`${BASE_API_URL}/manifests/${id}/lock`, {}, { headers });
         fetchManifests();
         alert('Manifest locked successfully');
       } catch (error) {
@@ -178,9 +182,11 @@ const Manifests = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Manifests</h1>
-        <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleUpload}>
-          Upload Manifest
-        </Button>
+        {!showForm && (
+          <Button variant="contained" color="primary" startIcon={<Add />} onClick={handleUpload}>
+            Upload Manifest
+          </Button>
+        )}
       </div>
       {showForm && (
         <Card className="mb-6">
@@ -204,8 +210,8 @@ const Manifests = () => {
                   fullWidth
                 >
                   <MenuItem value="">Choose a shipment</MenuItem>
-                  {shipments.map(shipment => (
-                    <MenuItem key={shipment._id} value={shipment._id}>{shipment.trackingNumber}</MenuItem>
+                  {Array.isArray(shipments) && shipments.map(shipment => (
+                    <MenuItem key={shipment._id || shipment.id} value={shipment._id || shipment.id}>{shipment.trackingNumber || 'No Tracking'}</MenuItem>
                   ))}
                 </TextField>
               </div>
@@ -223,30 +229,11 @@ const Manifests = () => {
             <DataGrid
               rows={manifests}
               getRowId={(row) => row._id}
-              columns={columns.map(col => col.field === 'actions' ? { ...col, renderCell: (params) => (
-                <div className="flex space-x-1">
-                  <Button size="small" startIcon={<Visibility />} onClick={() => handleView(params.row)}>View</Button>
-                  {params.row.status !== 'locked' && (
-                    <>
-                      {params.row.status === 'draft' && (
-                        <Button size="small" startIcon={<Edit />} color="primary" onClick={() => handleEdit(params.row)}>Edit</Button>
-                      )}
-                      {(params.row.status === 'draft' || params.row.status === 'edited') && (
-                        <Button size="small" startIcon={<Send />} color="secondary" onClick={() => handleManifestSubmit(params.row._id)}>Submit</Button>
-                      )}
-                      {params.row.status === 'submitted' && (
-                        <Button size="small" startIcon={<Lock />} color="success" onClick={() => handleManifestLock(params.row._id)}>Lock</Button>
-                      )}
-                    </>
-                  )}
-                  <Button size="small" color="error" startIcon={<Delete />} onClick={() => handleDelete(params.row._id)}>Delete</Button>
-                </div>
-              )} : col)}
+              columns={columns}
               pageSize={10}
               rowsPerPageOptions={[5, 10, 25]}
               loading={loading}
               disableSelectionOnClick
-              autoWidth
             />
           </div>
         </CardContent>

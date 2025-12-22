@@ -66,13 +66,14 @@ router.get('/actions-summary', async (req, res) => {
 // GET / - Retrieve all shipments for the authenticated user with filters
 router.get('/', async (req, res) => {
   try {
-    const { status, carrier, origin, destination, startDate, endDate, search, page = 1, limit = 10 } = req.query;
+    const { status, carrier, origin, destination, startDate, endDate, search, paymentStatus, page = 1, limit = 10 } = req.query;
     const query = { user: req.user._id };
 
     if (status) query.status = status;
     if (carrier) query.carrier = new RegExp(carrier, 'i');
     if (origin) query.origin = new RegExp(origin, 'i');
     if (destination) query.destination = new RegExp(destination, 'i');
+    if (paymentStatus) query.paymentStatus = paymentStatus;
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
@@ -283,6 +284,66 @@ router.get('/ops-metrics', async (req, res) => {
   }
 });
 
+// GET /export - Export shipments to CSV
+router.get('/export', async (req, res) => {
+  try {
+    const { status, carrier, startDate, endDate, paymentStatus } = req.query;
+    const query = { user: req.user._id };
+
+    if (status) query.status = status;
+    if (carrier) query.carrier = new RegExp(carrier, 'i');
+    if (paymentStatus) query.paymentStatus = paymentStatus;
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
+
+    // Create CSV content
+    const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
+    const csvRows = shipments.map(shipment =>
+      `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
+    ).join('\n');
+
+    const csvContent = csvHeaders + csvRows;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
+    res.send(csvContent);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/label - Generate AWB label
+router.get('/:id/label', async (req, res) => {
+  try {
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    if (!shipment) {
+      return res.status(404).json({ message: 'Shipment not found' });
+    }
+
+    // Mock label generation - in real app, this would generate a PDF or image
+    const labelContent = `
+      AWB Label
+      Order ID: ${shipment.orderId}
+      Tracking: ${shipment.trackingNumber}
+      From: ${shipment.origin}
+      To: ${shipment.destination}
+      Weight: ${shipment.weight}kg
+      Status: ${shipment.status}
+    `;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.trackingNumber}.txt"`);
+    res.send(labelContent);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /:id - Retrieve a specific shipment by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -314,6 +375,10 @@ router.put('/:id', async (req, res) => {
 
     const oldStatus = shipment.status;
     Object.assign(shipment, req.body);
+
+    if (req.body.weight) {
+      shipment.cost = parseFloat(req.body.weight) * 10;
+    }
 
     if (req.body.status && req.body.status !== oldStatus) {
       shipment.statusHistory.push({
@@ -406,67 +471,6 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
   } catch (err) {
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ message: err.message });
-  }
-});
-
-
-
-// GET /export - Export shipments to CSV
-router.get('/export', async (req, res) => {
-  try {
-    const { status, carrier, startDate, endDate } = req.query;
-    const query = { user: req.user._id };
-
-    if (status) query.status = status;
-    if (carrier) query.carrier = new RegExp(carrier, 'i');
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
-
-    // Create CSV content
-    const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
-    const csvRows = shipments.map(shipment =>
-      `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
-    ).join('\n');
-
-    const csvContent = csvHeaders + csvRows;
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
-    res.send(csvContent);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// GET /:id/label - Generate AWB label
-router.get('/:id/label', async (req, res) => {
-  try {
-    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
-    if (!shipment) {
-      return res.status(404).json({ message: 'Shipment not found' });
-    }
-
-    // Mock label generation - in real app, this would generate a PDF or image
-    const labelContent = `
-      AWB Label
-      Order ID: ${shipment.orderId}
-      Tracking: ${shipment.trackingNumber}
-      From: ${shipment.origin}
-      To: ${shipment.destination}
-      Weight: ${shipment.weight}kg
-      Status: ${shipment.status}
-    `;
-
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.trackingNumber}.txt"`);
-    res.send(labelContent);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -45,14 +45,14 @@ const Login = () => {
           {/* Header */}
           <div className="mb-10">
             <h1 className="text-4xl font-bold text-gray-800 mb-3">Log In</h1>
-            <p className="text-gray-400 text-sm">
-              Welcome to &nbsp;
+            <p className="text-gray-500 text-sm">
+              {/* Welcome to &nbsp;
               <span
                 style={{ color: "#2563eb", fontSize: "1rem", fontWeight: "500" }}>
                 SARANG
-              </span>
+              </span> */}
               <br/>
-               Log In to manage your logistics and shipments seamlessly
+              To manage your logistics and shipments seamlessly
             </p>
           </div>
 
@@ -120,8 +120,10 @@ const Login = () => {
             <a href="#" className="text-blue-600 text-sm hover:underline">
               Sign Up
             </a>
+
           </div>
           <div className="text-center mt-4">
+             <span className="text-gray-300 text-sm">Powered By</span>
             <img
               src={SarangLogo}
               alt="Sarang Logo"

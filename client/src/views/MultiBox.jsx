@@ -3,6 +3,7 @@ import { Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, T
 import { Add, Delete } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const MultiBox = () => {
   const { token } = useAuth();
@@ -21,7 +22,7 @@ const MultiBox = () => {
 
   const fetchBoxes = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/multi-box/${orderId}`, { headers });
+      const response = await axios.get(`${BASE_API_URL}/multi-box/${orderId}`, { headers });
       setBoxes(response.data);
     } catch (error) {
       console.error('Failed to fetch boxes:', error);
@@ -35,7 +36,7 @@ const MultiBox = () => {
 
   const handleSaveBox = async () => {
     try {
-      await axios.post(`http://localhost:5000/api/multi-box/${orderId}`, newBox, { headers });
+      await axios.post(`${BASE_API_URL}/multi-box/${orderId}`, newBox, { headers });
       fetchBoxes();
       setDialogOpen(false);
     } catch (error) {
@@ -45,7 +46,7 @@ const MultiBox = () => {
 
   const handleDeleteBox = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/multi-box/${id}`, { headers });
+      await axios.delete(`${BASE_API_URL}/multi-box/${id}`, { headers });
       fetchBoxes();
     } catch (error) {
       console.error('Failed to delete box:', error);
