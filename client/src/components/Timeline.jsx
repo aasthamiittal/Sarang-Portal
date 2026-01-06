@@ -1,27 +1,62 @@
-import React from 'react';
-import { Typography, Paper, Box, Stepper, Step, StepLabel } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Typography, Paper, Box, Stepper, Step, StepLabel, CircularProgress } from '@mui/material';
+import axios from 'axios';
+import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
-const ShipmentTimeline = ({ statusHistory }) => {
-  if (!statusHistory || statusHistory.length === 0) {
+const ShipmentTimeline = ({ shipmentId }) => {
+  const { token } = useAuth();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    if (shipmentId) {
+      fetchEvents();
+    }
+  }, [shipmentId]);
+
+  const fetchEvents = async () => {
+    try {
+      const response = await axios.get(`${BASE_API_URL}/shipments/${shipmentId}/events`, { headers });
+      setEvents(response.data);
+    } catch (error) {
+      console.error('Failed to fetch tracking events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <CircularProgress />;
+  }
+
+  if (!events || events.length === 0) {
     return <Typography>No timeline available</Typography>;
   }
 
   return (
     <Box sx={{ width: '100%', p: 2 }}>
       <Stepper orientation="vertical">
-        {statusHistory.map((item, index) => (
+        {events.map((event, index) => (
           <Step key={index} active={true} completed={true}>
             <StepLabel>
               <Paper elevation={2} sx={{ p: 2, mt: 1, width: '100%' }}>
                 <Typography variant="h6">
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('-', ' ')}
+                  {event.eventCode.replace('_', ' ')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {new Date(item.timestamp).toLocaleString()}
+                  {new Date(event.timestamp).toLocaleString()}
                 </Typography>
-                {item.note && (
+                {event.location && (
+                  <Typography variant="body2" color="text.secondary">
+                    Location: {event.location}
+                  </Typography>
+                )}
+                {event.description && (
                   <Typography variant="body1" sx={{ mt: 1 }}>
-                    {item.note}
+                    {event.description}
                   </Typography>
                 )}
               </Paper>

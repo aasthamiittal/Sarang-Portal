@@ -14,8 +14,9 @@ const Pickup = () => {
   const [selectedPickup, setSelectedPickup] = useState(null);
   const [newPickup, setNewPickup] = useState({
     orderId: '',
-    pickupAddress: '',
-    preferredSlot: ''
+    pickupLocation: '',
+    preferredSlot: '',
+    manifests: []
   });
 
   const headers = { Authorization: `Bearer ${token}` };
@@ -44,7 +45,7 @@ const Pickup = () => {
   };
 
   const handleRequestPickup = () => {
-    setNewPickup({ orderId: '', pickupAddress: '', preferredSlot: '' });
+    setNewPickup({ orderId: '', pickupLocation: '', preferredSlot: '', manifests: [] });
     setDialogOpen(true);
   };
 
@@ -65,11 +66,10 @@ const Pickup = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending': return 'warning';
-      case 'assigned': return 'info';
-      case 'in-progress': return 'primary';
-      case 'completed': return 'success';
-      case 'cancelled': return 'error';
+      case 'REQUESTED': return 'warning';
+      case 'SCHEDULED': return 'info';
+      case 'PICKED': return 'success';
+      case 'FAILED': return 'error';
       default: return 'default';
     }
   };
@@ -101,7 +101,7 @@ const Pickup = () => {
             {pickups.map((pickup) => (
               <TableRow key={pickup._id}>
                 <TableCell>{pickup.orderId}</TableCell>
-                <TableCell>{pickup.pickupAddress}</TableCell>
+                <TableCell>{pickup.pickupLocation}</TableCell>
                 <TableCell>{pickup.preferredSlot}</TableCell>
                 <TableCell>
                   <Chip
@@ -133,9 +133,9 @@ const Pickup = () => {
             margin="normal"
           />
           <TextField
-            label="Pickup Address"
-            value={newPickup.pickupAddress}
-            onChange={(e) => setNewPickup({ ...newPickup, pickupAddress: e.target.value })}
+            label="Pickup Location"
+            value={newPickup.pickupLocation}
+            onChange={(e) => setNewPickup({ ...newPickup, pickupLocation: e.target.value })}
             fullWidth
             margin="normal"
             multiline

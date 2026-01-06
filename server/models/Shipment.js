@@ -1,18 +1,96 @@
 const mongoose = require('mongoose');
 
+// Define valid statuses
+const SHIPMENT_STATUSES = [
+  'DRAFT',
+  'BOOKED',
+  'LABEL_GENERATED',
+  'PACKED',
+  'MANIFESTED',
+  'DISPATCHED',
+  'IN_TRANSIT',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'RTO_INITIATED',
+  'RTO_IN_TRANSIT',
+  'RETURNED_TO_ORIGIN',
+  'LOST',
+  'DAMAGED',
+  'CANCELLED'
+];
+
+// Define valid transitions
+const VALID_TRANSITIONS = {
+  'DRAFT': ['BOOKED', 'CANCELLED'],
+  'BOOKED': ['LABEL_GENERATED', 'CANCELLED'],
+  'LABEL_GENERATED': ['PACKED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'PACKED': ['MANIFESTED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'MANIFESTED': ['DISPATCHED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'DISPATCHED': ['IN_TRANSIT', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'IN_TRANSIT': ['OUT_FOR_DELIVERY', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'OUT_FOR_DELIVERY': ['DELIVERED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'DELIVERED': [],
+  'RTO_INITIATED': ['RTO_IN_TRANSIT'],
+  'RTO_IN_TRANSIT': ['RETURNED_TO_ORIGIN'],
+  'RETURNED_TO_ORIGIN': [],
+  'LOST': [],
+  'DAMAGED': [],
+  'CANCELLED': []
+};
+
+// Fields that become immutable after LABEL_GENERATED
+const IMMUTABLE_FIELDS_AFTER_LABEL = [
+  'origin',
+  'destination',
+  'weight',
+  'carrier',
+  'customerInfo',
+  'productInfo',
+  'pickupAddress'
+];
+
+// All fields become immutable after manifest submission
+const IMMUTABLE_FIELDS_AFTER_MANIFEST = [
+  'orderId',
+  'trackingNumber',
+  'awbNumber',
+  'origin',
+  'destination',
+  'carrier',
+  'weight',
+  'cost',
+  'pickupDate',
+  'dispatchDate',
+  'deliveryDate',
+  'proofOfDelivery',
+  'paymentStatus',
+  'pickupAddress',
+  'customerInfo',
+  'billingSameAsShipping',
+  'productInfo',
+  'orderNotes',
+  'zone',
+  'externalTrackingId',
+  'archived',
+  'labelGeneratedAt',
+  'manifestSubmittedAt',
+  'manifest',
+  'user'
+];
+
 const shipmentSchema = new mongoose.Schema({
-  orderId: { type: String, unique: true },
-  trackingNumber: { type: String, required: true, unique: true },
-  awbNumber: { type: String },
-  status: { type: String, enum: ['draft', 'pending-label', 'packed', 'dispatched', 'in-transit', 'delivered', 'cancelled'], default: 'draft' },
-  origin: { type: String, required: true },
-  destination: { type: String, required: true },
-  carrier: { type: String, required: true },
-  weight: { type: Number, required: true },
-  cost: { type: Number },
-  pickupDate: { type: Date },
+   orderId: { type: String, unique: true },
+   trackingNumber: { type: String, required: true, unique: true },
+   awbNumber: { type: String },
+   origin: { type: String, required: true },
+   destination: { type: String, required: true },
+   carrier: { type: String, required: true },
+   weight: { type: Number, required: true },
+   cost: { type: Number },
+   pickupDate: { type: Date },
   dispatchDate: { type: Date },
   deliveryDate: { type: Date },
+  proofOfDelivery: { type: String },
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
   pickupAddress: {
     name: String,
@@ -45,9 +123,10 @@ const shipmentSchema = new mongoose.Schema({
   archived: { type: Boolean, default: false },
   labelGeneratedAt: { type: Date },
   manifestSubmittedAt: { type: Date },
+  manifest: { type: mongoose.Schema.Types.ObjectId, ref: 'Manifest' },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   statusHistory: [{
-    status: { type: String, enum: ['draft', 'pending-label', 'packed', 'dispatched', 'in-transit', 'delivered', 'cancelled'] },
+    status: { type: String, enum: SHIPMENT_STATUSES },
     timestamp: { type: Date, default: Date.now },
     note: { type: String }
   }],
@@ -55,4 +134,39 @@ const shipmentSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Pre-save hook to enforce immutability after label generation and manifest submission
+shipmentSchema.pre('save', function(next) {
+  if (typeof next !== 'function') {
+    // If next is not a function, skip the hook to prevent errors
+    return;
+  }
+  // Check immutability after label generation
+  if (this.labelGeneratedAt && this.isModified()) {
+    const modifiedFields = this.modifiedPaths();
+    const immutableModified = modifiedFields.filter(field => IMMUTABLE_FIELDS_AFTER_LABEL.includes(field));
+    if (immutableModified.length > 0) {
+      return next(new Error(`Cannot modify immutable fields after label generation: ${immutableModified.join(', ')}`));
+    }
+  }
+
+  // Check immutability after manifest submission
+  if (this.manifestSubmittedAt && this.isModified()) {
+    const modifiedFields = this.modifiedPaths();
+    const immutableModified = modifiedFields.filter(field => IMMUTABLE_FIELDS_AFTER_MANIFEST.includes(field));
+    if (immutableModified.length > 0) {
+      return next(new Error(`Cannot modify immutable fields after manifest submission: ${immutableModified.join(', ')}`));
+    }
+  }
+  next();
+});
+
+// Method to get current status from latest tracking event
+shipmentSchema.methods.getCurrentStatus = async function() {
+  const TrackingEvent = mongoose.model('TrackingEvent');
+  const latestEvent = await TrackingEvent.findOne({ shipment: this._id }).sort({ timestamp: -1 });
+  return latestEvent ? latestEvent.eventCode : 'DRAFT';
+};
+
 module.exports = mongoose.model('Shipment', shipmentSchema);
+module.exports.SHIPMENT_STATUSES = SHIPMENT_STATUSES;
+module.exports.VALID_TRANSITIONS = VALID_TRANSITIONS;

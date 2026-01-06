@@ -5,7 +5,13 @@ const billingSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   status: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
   dueDate: { type: Date },
-  paidAt: { type: Date }
+  paidAt: { type: Date },
+  adjustments: [{
+    type: { type: String },
+    amount: { type: Number },
+    description: { type: String },
+    date: { type: Date, default: Date.now }
+  }]
 });
 
 module.exports = mongoose.model('Billing', billingSchema);

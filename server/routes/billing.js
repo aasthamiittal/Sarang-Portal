@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Billing = require('../models/Billing');
 const Shipment = require('../models/Shipment');
+const { calculateBalance, getWalletActivity } = require('../services/billingService');
 
 router.use(auth);
 
@@ -86,8 +87,7 @@ router.delete('/:id', async (req, res) => {
 // GET /balance - Get wallet balance
 router.get('/balance', async (req, res) => {
   try {
-    // Mock balance - in real app, this would be calculated from transactions
-    const balance = 1250.75; // Mock data
+    const balance = await calculateBalance(req.user.id);
     res.json({ balance });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -98,77 +98,39 @@ router.get('/balance', async (req, res) => {
 router.get('/activity', async (req, res) => {
   try {
     const { dateFilter } = req.query;
-
-    // Mock activity data
-    const activity = [
-      {
-        description: 'Shipment payment - Order #12345',
-        amount: 25.50,
-        type: 'debit',
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        orderId: '12345'
-      },
-      {
-        description: 'Wallet recharge',
-        amount: 100.00,
-        type: 'credit',
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
-      },
-      {
-        description: 'Shipment payment - Order #12346',
-        amount: 15.75,
-        type: 'debit',
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        orderId: '12346'
-      },
-      {
-        description: 'Refund - Order #12340',
-        amount: 30.00,
-        type: 'credit',
-        date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-        orderId: '12340'
-      }
-    ];
-
-    // Apply date filter
-    let filteredActivity = activity;
-    if (dateFilter) {
-      const now = new Date();
-      let startDate;
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          filteredActivity = activity.filter(a => a.date >= startDate);
-          break;
-        case 'yesterday':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          filteredActivity = activity.filter(a => a.date >= startDate && a.date < yesterdayEnd);
-          break;
-        case 'last7days':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          filteredActivity = activity.filter(a => a.date >= startDate);
-          break;
-        case 'last30days':
-          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          filteredActivity = activity.filter(a => a.date >= startDate);
-          break;
-      }
-    }
-
-    res.json(filteredActivity);
+    const activity = await getWalletActivity(req.user.id, { dateFilter });
+    res.json(activity);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+const AccountLedger = require('../models/AccountLedger');
+
 // POST /recharge - Recharge wallet
 router.post('/recharge', async (req, res) => {
   try {
     const { amount } = req.body;
-    // Mock recharge - in real app, this would integrate with payment gateway
-    res.json({ message: 'Recharge initiated', amount });
+    const rechargeAmount = parseFloat(amount);
+
+    // Calculate current balance for balanceAfter
+    const currentBalance = await calculateBalance(req.user.id);
+
+    // Create ledger entry
+    const ledgerEntry = new AccountLedger({
+      user: req.user.id,
+      type: 'credit',
+      amount: rechargeAmount,
+      referenceType: 'payment',
+      referenceId: null,
+      description: 'Wallet recharge',
+      balanceAfter: currentBalance + rechargeAmount
+    });
+
+    await ledgerEntry.save();
+
+    const newBalance = currentBalance + rechargeAmount;
+    res.json({ message: 'Recharge successful', balance: newBalance });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, TextField, Card, CardContent, Typography, Grid, MenuItem } from '@mui/material';
+import { Button, TextField, Card, CardContent, Typography, Grid, MenuItem, Box } from '@mui/material';
 import { Send } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
@@ -54,20 +54,50 @@ const RequestQuote = () => {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Request a Quote</h1>
+    <Box sx={{ padding: { xs: 2, md: 3 } }}>
+      <Typography
+        variant="h4"
+        component="h1"
+        sx={{
+          fontWeight: 'bold',
+          mb: 4,
+          color: '#1f2937',
+          fontSize: { xs: '1.875rem', md: '2.25rem' }
+        }}
+      >
+        Request a Quote
+      </Typography>
 
-      <Card className="max-w-2xl mx-auto">
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
+      <Card
+        elevation={2}
+        sx={{
+          maxWidth: '900px',
+          mx: 'auto',
+          borderRadius: 2
+        }}
+      >
+        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+              mb: 1.5,
+              color: '#374151'
+            }}
+          >
             Get a customized shipping quote for your needs
           </Typography>
-          <Typography variant="body2" color="text.secondary" className="mb-6">
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 4 }}
+          >
             Fill out the form below and our team will provide you with a competitive quote within 24 hours.
           </Typography>
 
           <form onSubmit={handleSubmit}>
             <Grid container spacing={3}>
+              {/* Origin and Destination */}
               <Grid item xs={12} md={6}>
                 <TextField
                   label="Origin"
@@ -75,6 +105,8 @@ const RequestQuote = () => {
                   onChange={(e) => handleChange('origin', e.target.value)}
                   fullWidth
                   required
+                  variant="outlined"
+                  placeholder="Enter origin city/address"
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -84,8 +116,12 @@ const RequestQuote = () => {
                   onChange={(e) => handleChange('destination', e.target.value)}
                   fullWidth
                   required
+                  variant="outlined"
+                  placeholder="Enter destination city/address"
                 />
               </Grid>
+
+              {/* Weight and Service Type */}
               <Grid item xs={12} md={6}>
                 <TextField
                   label="Weight (kg)"
@@ -94,9 +130,12 @@ const RequestQuote = () => {
                   onChange={(e) => handleChange('weight', e.target.value)}
                   fullWidth
                   required
+                  variant="outlined"
+                  placeholder="Enter weight in kg"
+                  inputProps={{ min: 0, step: 0.01 }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              
                 <TextField
                   select
                   label="Service Type"
@@ -104,16 +143,32 @@ const RequestQuote = () => {
                   onChange={(e) => handleChange('serviceType', e.target.value)}
                   fullWidth
                   required
+                  variant="outlined"
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
                 >
+                  <MenuItem value="">
+                    <em>Select Service Type</em>
+                  </MenuItem>
                   <MenuItem value="standard">Standard Delivery</MenuItem>
                   <MenuItem value="express">Express Delivery</MenuItem>
                   <MenuItem value="overnight">Overnight</MenuItem>
                   <MenuItem value="international">International</MenuItem>
                 </TextField>
-              </Grid>
+
+              {/* Dimensions Section */}
               <Grid item xs={12}>
-                <Typography variant="h6" gutterBottom>
-                  Dimensions (cm)
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight: 600,
+                    color: '#374151',
+                    mt: 1,
+                    mb: 1
+                  }}
+                >
+                  Package Dimensions (cm) :
                 </Typography>
               </Grid>
               <Grid item xs={12} md={4}>
@@ -123,6 +178,9 @@ const RequestQuote = () => {
                   value={formData.dimensions.length}
                   onChange={(e) => handleChange('dimensions.length', e.target.value)}
                   fullWidth
+                  variant="outlined"
+                  placeholder="Length"
+                  inputProps={{ min: 0, step: 0.1 }}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -132,6 +190,9 @@ const RequestQuote = () => {
                   value={formData.dimensions.width}
                   onChange={(e) => handleChange('dimensions.width', e.target.value)}
                   fullWidth
+                  variant="outlined"
+                  placeholder="Width"
+                  inputProps={{ min: 0, step: 0.1 }}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -141,8 +202,13 @@ const RequestQuote = () => {
                   value={formData.dimensions.height}
                   onChange={(e) => handleChange('dimensions.height', e.target.value)}
                   fullWidth
+                  variant="outlined"
+                  placeholder="Height"
+                  inputProps={{ min: 0, step: 0.1 }}
                 />
               </Grid>
+
+              {/* Special Requirements */}
               <Grid item xs={12}>
                 <TextField
                   label="Special Requirements"
@@ -151,9 +217,12 @@ const RequestQuote = () => {
                   fullWidth
                   multiline
                   rows={4}
-                  placeholder="Any special handling instructions, fragile items, etc."
+                  variant="outlined"
+                  placeholder="Any special handling instructions, fragile items, temperature control, etc."
                 />
               </Grid>
+
+              {/* Submit Button */}
               <Grid item xs={12}>
                 <Button
                   type="submit"
@@ -161,6 +230,18 @@ const RequestQuote = () => {
                   size="large"
                   startIcon={<Send />}
                   fullWidth
+                  sx={{
+                    mt: 2,
+                    py: 1.5,
+                    textTransform: 'none',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    borderRadius: 1.5,
+                    boxShadow: 2,
+                    '&:hover': {
+                      boxShadow: 3
+                    }
+                  }}
                 >
                   Request Quote
                 </Button>
@@ -169,7 +250,7 @@ const RequestQuote = () => {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 };
 

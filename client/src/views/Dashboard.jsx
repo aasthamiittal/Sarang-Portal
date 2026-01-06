@@ -99,13 +99,13 @@ const Dashboard = () => {
         <div className="flex-1">
           <h3 className="text-sm font-medium text-gray-800 mb-1">{title}</h3>
           <div className="flex items-center gap-3">
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            {showProgress && (
-              <div className="flex-1 h-2 bg-gray-200 rounded-full max-w-[120px]">
-                <div className="h-2 bg-blue-500 rounded-full" style={{ width: '60%' }}></div>
-              </div>
-            )}
-          </div>
+           <p className="text-2xl font-bold text-gray-900">{value}</p>
+           {showProgress && (
+             <div className="flex-1 h-2 bg-gray-200 rounded-full max-w-[100px] sm:max-w-[120px] md:max-w-[150px]">
+               <div className="h-2 bg-blue-500 rounded-full" style={{ width: '60%' }}></div>
+             </div>
+           )}
+         </div>
         </div>
         <div className="text-4xl ml-3">{icon}</div>
       </div>
@@ -141,7 +141,7 @@ const Dashboard = () => {
         </div>
 
         {/* Order Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <OrderSummaryCard
             title="All Orders"
             value={orderSummary.allOrders}
@@ -208,17 +208,17 @@ const Dashboard = () => {
           {/* Credit Balance & Wallet Activity */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             {/* Credit Balance Header with Blue Background */}
-            <div className="bg-blue-100 -mx-6 -mt-6 p-6 rounded-t-lg mb-6 relative overflow-hidden">
+            <div className="bg-blue-100 -mx-6 -mt-6 p-4 sm:p-6 rounded-t-lg mb-6 relative overflow-hidden">
               <div className="relative z-10">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">Credit Balance</h2>
-                <p className="text-4xl font-bold text-gray-900">
+                <p className="text-3xl sm:text-4xl font-bold text-gray-900">
                   ${orderSummary.creditBalance?.toFixed(2) || '0.00'}
                 </p>
               </div>
               {/* Decorative elements */}
-              <div className="absolute top-4 right-4 w-20 h-20 bg-blue-200 rounded-full opacity-30"></div>
-              <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-200 rounded-tl-full opacity-20"></div>
-              <svg className="absolute top-6 right-8 w-8 h-8 text-blue-300" fill="currentColor" viewBox="0 0 20 20">
+              <div className="absolute top-2 right-2 sm:top-4 sm:right-4 w-16 h-16 sm:w-20 sm:h-20 bg-blue-200 rounded-full opacity-30"></div>
+              <div className="absolute bottom-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-200 rounded-tl-full opacity-20"></div>
+              <svg className="absolute top-4 right-6 sm:top-6 sm:right-8 w-6 h-6 sm:w-8 sm:h-8 text-blue-300" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
                 <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
               </svg>
@@ -233,8 +233,8 @@ const Dashboard = () => {
                     <div className="flex-1">
                       <p className="text-sm text-gray-800 font-medium">{activity.description}</p>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900 ml-4">
-                      ${activity.amount}
+                    <span className={`text-sm font-semibold ml-4 ${activity.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                      {activity.type === 'credit' ? '+' : '-'}${activity.amount}
                     </span>
                   </div>
                 ))}

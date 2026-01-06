@@ -37,26 +37,55 @@ import { BASE_API_URL } from '../constants';
 
 const getStatusColor = (status) => {
   switch (status) {
-    case 'draft': return 'default';
-    case 'pending-label': return 'warning';
-    case 'packed': return 'info';
-    case 'dispatched': return 'primary';
-    case 'in-transit': return 'info';
-    case 'delivered': return 'success';
-    case 'cancelled': return 'error';
+    case 'DRAFT': return 'default';
+    case 'BOOKED': return 'default';
+    case 'LABEL_GENERATED': return 'warning';
+    case 'PACKED': return 'info';
+    case 'MANIFESTED': return 'primary';
+    case 'DISPATCHED': return 'primary';
+    case 'IN_TRANSIT': return 'info';
+    case 'OUT_FOR_DELIVERY': return 'info';
+    case 'DELIVERED': return 'success';
+    case 'CANCELLED': return 'error';
+    case 'RTO_INITIATED': return 'warning';
+    case 'RTO_IN_TRANSIT': return 'warning';
+    case 'RETURNED_TO_ORIGIN': return 'error';
+    case 'LOST': return 'error';
+    case 'DAMAGED': return 'error';
     default: return 'default';
+  }
+};
+
+// Function to get current status from tracking events
+const getCurrentStatus = async (shipmentId, token) => {
+  try {
+    const response = await axios.get(`${BASE_API_URL}/shipments/${shipmentId}/events`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const events = response.data;
+    if (events.length > 0) {
+      // Sort by timestamp descending and get the latest
+      const latestEvent = events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+      return latestEvent.eventCode;
+    }
+    return 'DRAFT'; // Default if no events
+  } catch (error) {
+    console.error('Failed to fetch current status:', error);
+    return 'DRAFT';
   }
 };
 
 const statusTabs = [
   { label: 'All Orders', value: '' },
-  { label: 'Drafts', value: 'draft' },
-  { label: 'Ready', value: 'pending-label' },
-  { label: 'Packed', value: 'packed' },
-  { label: 'Manifested', value: 'in-transit' },
-  { label: 'Dispatched', value: 'dispatched' },
-  { label: 'Received', value: 'delivered' },
-  { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Booked', value: 'BOOKED' },
+  { label: 'Label Generated', value: 'LABEL_GENERATED' },
+  { label: 'Packed', value: 'PACKED' },
+  { label: 'Manifested', value: 'MANIFESTED' },
+  { label: 'Dispatched', value: 'DISPATCHED' },
+  { label: 'In Transit', value: 'IN_TRANSIT' },
+  { label: 'Out for Delivery', value: 'OUT_FOR_DELIVERY' },
+  { label: 'Delivered', value: 'DELIVERED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
 ];
 
 const Shipments = () => {
@@ -446,7 +475,7 @@ const Shipments = () => {
   };
 
   return (
-    <Box sx={{ bgcolor: '#f8f9fa', minHeight: '100vh', p: 3 }}>
+    <Box sx={{ bgcolor: '#f8f9fa', minHeight: '100vh', p: 3,maxWidth:'150vh' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
@@ -660,13 +689,16 @@ const Shipments = () => {
               fullWidth
             >
               <MenuItem value="">All</MenuItem>
-              <MenuItem value="draft">Draft</MenuItem>
-              <MenuItem value="pending-label">Ready</MenuItem>
-              <MenuItem value="packed">Packed</MenuItem>
-              <MenuItem value="dispatched">Dispatched</MenuItem>
-              <MenuItem value="in-transit">In Transit</MenuItem>
-              <MenuItem value="delivered">Delivered</MenuItem>
-              <MenuItem value="cancelled">Cancelled</MenuItem>
+              <MenuItem value="DRAFT">Draft</MenuItem>
+              <MenuItem value="BOOKED">Booked</MenuItem>
+              <MenuItem value="LABEL_GENERATED">Label Generated</MenuItem>
+              <MenuItem value="PACKED">Packed</MenuItem>
+              <MenuItem value="MANIFESTED">Manifested</MenuItem>
+              <MenuItem value="DISPATCHED">Dispatched</MenuItem>
+              <MenuItem value="IN_TRANSIT">In Transit</MenuItem>
+              <MenuItem value="OUT_FOR_DELIVERY">Out for Delivery</MenuItem>
+              <MenuItem value="DELIVERED">Delivered</MenuItem>
+              <MenuItem value="CANCELLED">Cancelled</MenuItem>
             </TextField>
             <TextField
               select
@@ -740,7 +772,7 @@ const Shipments = () => {
       <Dialog open={timelineDialogOpen} onClose={() => setTimelineDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Shipment Timeline - {selectedShipment?.trackingNumber}</DialogTitle>
         <DialogContent>
-          {selectedShipment && <ShipmentTimeline statusHistory={selectedShipment.statusHistory} />}
+          {selectedShipment && <ShipmentTimeline shipmentId={selectedShipment._id} />}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTimelineDialogOpen(false)}>Close</Button>
@@ -884,7 +916,7 @@ const Shipments = () => {
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                   Shipment Timeline
                 </Typography>
-                <ShipmentTimeline statusHistory={selectedShipment.statusHistory} />
+                <ShipmentTimeline shipmentId={selectedShipment._id} />
               </Box>
 
               {/* Order Notes */}

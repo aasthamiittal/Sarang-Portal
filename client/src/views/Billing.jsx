@@ -3,6 +3,7 @@ import { Button, Card, CardContent, Typography, Table, TableBody, TableCell, Tab
 import { AccountBalanceWallet, Add, CreditCard, Assessment, GetApp } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { BASE_API_URL } from '../constants';
 
 const Billing = () => {
   const { token } = useAuth();
@@ -30,8 +31,8 @@ const Billing = () => {
   const fetchWalletData = async () => {
     try {
       const [balanceRes, activityRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/wallet/balance', { headers }),
-        axios.get('http://localhost:5000/api/wallet/history', { headers })
+        axios.get(`${BASE_API_URL}/billing/balance`, { headers }),
+        axios.get(`${BASE_API_URL}/billing/activity`, { headers })
       ]);
       setWalletBalance(balanceRes.data.balance);
       setWalletActivity(activityRes.data);
@@ -69,7 +70,7 @@ const Billing = () => {
     }
 
     try {
-      await axios.post('http://localhost:5000/api/wallet/recharge', { amount: rechargeAmount }, { headers });
+      await axios.post(`${BASE_API_URL}/billing/recharge`, { amount: rechargeAmount }, { headers });
       setRechargeDialogOpen(false);
       setRechargeAmount('');
       fetchWalletData();

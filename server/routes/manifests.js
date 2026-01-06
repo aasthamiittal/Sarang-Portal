@@ -3,6 +3,9 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Manifest = require('../models/Manifest');
 const Shipment = require('../models/Shipment');
+const TrackingEvent = require('../models/TrackingEvent');
+const Billing = require('../models/Billing');
+const { processShipmentBilling } = require('../services/billingService');
 const multer = require('multer');
 
 const storage = multer.diskStorage({
@@ -21,8 +24,8 @@ router.use(auth);
 // GET / - Retrieve all manifests for the authenticated user
 router.get('/', async (req, res) => {
   try {
-    const manifests = await Manifest.find().populate('shipment');
-    const userManifests = manifests.filter(m => m.shipment && m.shipment.user.toString() === req.user.id.toString());
+    const manifests = await Manifest.find().populate('shipments');
+    const userManifests = manifests.filter(m => m.shipments && m.shipments.every(s => s.user.toString() === req.user.id.toString()));
     res.json(userManifests);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -31,19 +34,19 @@ router.get('/', async (req, res) => {
 
 // POST / - Create a new manifest
 router.post('/', upload.single('file'), async (req, res) => {
-  const { shipment } = req.body;
-  if (!req.file || !shipment) {
-    return res.status(400).json({ message: 'File and shipment are required' });
+  const { shipments } = req.body;
+  if (!req.file || !shipments || !Array.isArray(shipments) || shipments.length === 0) {
+    return res.status(400).json({ message: 'File and at least one shipment are required' });
   }
   try {
-    const shipmentDoc = await Shipment.findOne({ _id: shipment, user: req.user.id });
-    if (!shipmentDoc) {
-      return res.status(404).json({ message: 'Shipment not found or not owned by user' });
+    const shipmentDocs = await Shipment.find({ _id: { $in: shipments }, user: req.user.id });
+    if (shipmentDocs.length !== shipments.length) {
+      return res.status(404).json({ message: 'One or more shipments not found or not owned by user' });
     }
     const manifest = new Manifest({
       fileName: req.file.originalname,
       filePath: req.file.path,
-      shipment
+      shipments
     });
     await manifest.save();
     res.status(201).json(manifest);
@@ -55,8 +58,8 @@ router.post('/', upload.single('file'), async (req, res) => {
 // GET /:id - Retrieve a specific manifest by ID
 router.get('/:id', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
     res.json(manifest);
@@ -68,8 +71,8 @@ router.get('/:id', async (req, res) => {
 // PUT /:id - Update a manifest by ID (only before submission)
 router.put('/:id', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
 
@@ -93,8 +96,8 @@ router.put('/:id', async (req, res) => {
 // DELETE /:id - Delete a manifest by ID
 router.delete('/:id', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
     await Manifest.findByIdAndDelete(req.params.id);
@@ -107,8 +110,8 @@ router.delete('/:id', async (req, res) => {
 // POST /:id/submit - Submit manifest (lock shipments)
 router.post('/:id/submit', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
 
@@ -122,11 +125,37 @@ router.post('/:id/submit', async (req, res) => {
     manifest.updatedAt = new Date();
     await manifest.save();
 
-    // Update shipment status and lock it
-    const shipment = manifest.shipment;
-    shipment.manifestSubmittedAt = new Date();
-    shipment.updatedAt = new Date();
-    await shipment.save();
+    // Update shipments: set status to DISPATCHED, manifestSubmittedAt, dispatchDate, and process billing
+    for (const shipment of manifest.shipments) {
+      // Create tracking event for DISPATCHED
+      const trackingEvent = new TrackingEvent({
+        shipment: shipment._id,
+        eventCode: 'DISPATCHED',
+        description: 'Shipment dispatched via manifest submission'
+      });
+      await trackingEvent.save();
+
+      // Update shipment
+      shipment.manifestSubmittedAt = new Date();
+      shipment.dispatchDate = new Date();
+      shipment.manifest = manifest._id;
+      shipment.updatedAt = new Date();
+      await shipment.save();
+
+      // Process billing for dispatch event
+      await processShipmentBilling(shipment._id, 'DISPATCHED', req.user.id);
+
+      // Create or update billing record
+      let billing = await Billing.findOne({ shipment: shipment._id });
+      if (!billing) {
+        billing = new Billing({
+          shipment: shipment._id,
+          amount: shipment.cost || 0,
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+        });
+        await billing.save();
+      }
+    }
 
     res.json({ message: 'Manifest submitted successfully', manifest });
   } catch (err) {
@@ -137,8 +166,8 @@ router.post('/:id/submit', async (req, res) => {
 // POST /:id/lock - Lock manifest (final step)
 router.post('/:id/lock', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
 
@@ -160,8 +189,8 @@ router.post('/:id/lock', async (req, res) => {
 // GET /:id/download - Download manifest file
 router.get('/:id/download', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
 
@@ -180,8 +209,8 @@ router.get('/:id/download', async (req, res) => {
 // GET /:id/report - Manifest report
 router.get('/:id/report', async (req, res) => {
   try {
-    const manifest = await Manifest.findById(req.params.id).populate('shipment');
-    if (!manifest || !manifest.shipment || manifest.shipment.user.toString() !== req.user.id.toString()) {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
       return res.status(404).json({ message: 'Manifest not found' });
     }
 
@@ -191,14 +220,14 @@ router.get('/:id/report', async (req, res) => {
       status: manifest.status,
       submittedAt: manifest.submittedAt,
       lockedAt: manifest.lockedAt,
-      shipment: {
-        orderId: manifest.shipment.orderId,
-        trackingNumber: manifest.shipment.trackingNumber,
-        carrier: manifest.shipment.carrier,
-        weight: manifest.shipment.weight,
-        cost: manifest.shipment.cost,
-        status: manifest.shipment.status
-      }
+      shipments: manifest.shipments.map(shipment => ({
+        orderId: shipment.orderId,
+        trackingNumber: shipment.trackingNumber,
+        carrier: shipment.carrier,
+        weight: shipment.weight,
+        cost: shipment.cost,
+        status: shipment.getCurrentStatus ? shipment.getCurrentStatus() : 'Unknown'
+      }))
     };
 
     res.json(report);

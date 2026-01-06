@@ -74,7 +74,7 @@ const Manifests = () => {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedShipment, setSelectedShipment] = useState('');
+  const [selectedShipments, setSelectedShipments] = useState([]);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -109,13 +109,15 @@ const Manifests = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFile || !selectedShipment) {
-      alert('Please select a file and a shipment');
+    if (!selectedFile || selectedShipments.length === 0) {
+      alert('Please select a file and at least one shipment');
       return;
     }
     const formData = new FormData();
     formData.append('file', selectedFile);
-    formData.append('shipment', selectedShipment);
+    selectedShipments.forEach(shipmentId => {
+      formData.append('shipments', shipmentId);
+    });
     try {
       await axios.post(`${BASE_API_URL}/manifests`, formData, {
         headers: {
@@ -126,7 +128,7 @@ const Manifests = () => {
       fetchManifests();
       setShowForm(false);
       setSelectedFile(null);
-      setSelectedShipment('');
+      setSelectedShipments([]);
     } catch (error) {
       console.error('Failed to upload manifest:', error);
     }
@@ -192,7 +194,7 @@ const Manifests = () => {
         <Card className="mb-6">
           <CardContent>
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 gap-4 mb-4">
                 <TextField
                   type="file"
                   label="Select File"
@@ -203,16 +205,29 @@ const Manifests = () => {
                 />
                 <TextField
                   select
-                  label="Select Shipment"
-                  value={selectedShipment}
-                  onChange={(e) => setSelectedShipment(e.target.value)}
+                  label="Select Shipments"
+                  value={selectedShipments}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedShipments(typeof value === 'string' ? value.split(',') : value);
+                  }}
                   required
                   fullWidth
+                  SelectProps={{
+                    multiple: true,
+                    renderValue: (selected) => {
+                      const selectedShipmentsData = shipments.filter(s => selected.includes(s._id || s.id));
+                      return selectedShipmentsData.map(s => s.trackingNumber || 'No Tracking').join(', ');
+                    }
+                  }}
                 >
-                  <MenuItem value="">Choose a shipment</MenuItem>
-                  {Array.isArray(shipments) && shipments.map(shipment => (
-                    <MenuItem key={shipment._id || shipment.id} value={shipment._id || shipment.id}>{shipment.trackingNumber || 'No Tracking'}</MenuItem>
-                  ))}
+                  {Array.isArray(shipments) && shipments
+                    .filter(shipment => ['PACKED', 'MANIFESTED'].includes(shipment.status))
+                    .map(shipment => (
+                      <MenuItem key={shipment._id || shipment.id} value={shipment._id || shipment.id}>
+                        {shipment.trackingNumber || 'No Tracking'} - {shipment.orderId}
+                      </MenuItem>
+                    ))}
                 </TextField>
               </div>
               <div className="flex flex-wrap gap-2">

@@ -7,20 +7,21 @@ const router = express.Router();
 // POST /api/pickup/request
 router.post('/request', auth, async (req, res) => {
   try {
-    const { orderId, pickupAddress, preferredSlot } = req.body;
+    const { orderId, pickupLocation, preferredSlot, manifests } = req.body;
 
     const pickup = new Pickup({
       orderId,
-      pickupAddress,
+      pickupLocation,
       preferredSlot,
+      manifests,
       userId: req.user.id,
-      timeline: [{ status: 'pending', note: 'Pickup requested' }]
+      timeline: [{ status: 'REQUESTED', note: 'Pickup requested' }]
     });
 
     await pickup.save();
     res.status(201).json(pickup);
   } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 });
 
@@ -61,6 +62,66 @@ router.get('/slots', auth, async (req, res) => {
     res.json(slots);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/pickup/:id/schedule
+router.put('/:id/schedule', auth, async (req, res) => {
+  try {
+    const { courier } = req.body;
+    const pickup = await Pickup.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup not found' });
+    }
+    if (pickup.status !== 'REQUESTED') {
+      return res.status(400).json({ message: 'Pickup can only be scheduled from REQUESTED status' });
+    }
+    pickup.status = 'SCHEDULED';
+    pickup.courier = courier;
+    pickup.timeline.push({ status: 'SCHEDULED', note: 'Pickup scheduled' });
+    await pickup.save();
+    res.json(pickup);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+// PUT /api/pickup/:id/pick
+router.put('/:id/pick', auth, async (req, res) => {
+  try {
+    const pickup = await Pickup.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup not found' });
+    }
+    if (pickup.status !== 'SCHEDULED') {
+      return res.status(400).json({ message: 'Pickup can only be picked from SCHEDULED status' });
+    }
+    pickup.status = 'PICKED';
+    pickup.timeline.push({ status: 'PICKED', note: 'Pickup completed' });
+    await pickup.save();
+    res.json(pickup);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+// PUT /api/pickup/:id/fail
+router.put('/:id/fail', auth, async (req, res) => {
+  try {
+    const { note } = req.body;
+    const pickup = await Pickup.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup not found' });
+    }
+    if (pickup.status === 'PICKED' || pickup.status === 'FAILED') {
+      return res.status(400).json({ message: 'Pickup cannot be failed from current status' });
+    }
+    pickup.status = 'FAILED';
+    pickup.timeline.push({ status: 'FAILED', note: note || 'Pickup failed' });
+    await pickup.save();
+    res.json(pickup);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 });
 

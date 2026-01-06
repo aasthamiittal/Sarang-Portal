@@ -5,7 +5,7 @@ const pickupSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  pickupAddress: {
+  pickupLocation: {
     type: String,
     required: true
   },
@@ -15,11 +15,16 @@ const pickupSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'assigned', 'in-progress', 'completed', 'cancelled'],
-    default: 'pending'
+    enum: ['REQUESTED', 'SCHEDULED', 'PICKED', 'FAILED'],
+    default: 'REQUESTED'
   },
-  agentName: {
-    type: String
+  manifests: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Manifest'
+  }],
+  courier: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   timeline: [{
     status: String,
@@ -37,5 +42,6 @@ const pickupSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
 
 module.exports = mongoose.model('Pickup', pickupSchema);

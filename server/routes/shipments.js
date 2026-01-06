@@ -7,10 +7,16 @@ const Carrier = require('../models/Carrier');
 const Rate = require('../models/Rate');
 const AwbStock = require('../models/AwbStock');
 const AccountLedger = require('../models/AccountLedger');
+const TrackingEvent = require('../models/TrackingEvent');
+const Pickup = require('../models/Pickup');
+const Manifest = require('../models/Manifest');
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
+const { processShipmentBilling } = require('../services/billingService');
+
+const { SHIPMENT_STATUSES, VALID_TRANSITIONS } = Shipment;
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -50,11 +56,33 @@ router.get('/actions-summary', async (req, res) => {
       }
     }
 
-    // Mock data - in real app, these would come from actual models
+    // Get pickups in progress
+    const pickupQuery = { userId: req.user._id, status: { $in: ['REQUESTED', 'SCHEDULED'] } };
+    if (dateFilter) {
+      pickupQuery.createdAt = query.createdAt;
+    }
+    const pickupsInProgress = await Pickup.countDocuments(pickupQuery);
+
+    // Get open manifests
+    const userShipments = await Shipment.find(query).select('_id');
+    const shipmentIds = userShipments.map(s => s._id);
+    const manifestQuery = { status: { $in: ['draft', 'edited'] }, shipments: { $in: shipmentIds } };
+    if (dateFilter) {
+      manifestQuery.uploadedAt = query.createdAt;
+    }
+    const openManifests = await Manifest.countDocuments(manifestQuery);
+
+    // Get disputed orders (failed payment status)
+    const disputedQuery = { user: req.user._id, paymentStatus: 'failed' };
+    if (dateFilter) {
+      disputedQuery.createdAt = query.createdAt;
+    }
+    const disputedOrders = await Shipment.countDocuments(disputedQuery);
+
     const summary = {
-      pickupsInProgress: Math.floor(Math.random() * 5), // Mock
-      openManifests: Math.floor(Math.random() * 3), // Mock
-      disputedOrders: Math.floor(Math.random() * 2) // Mock
+      pickupsInProgress,
+      openManifests,
+      disputedOrders
     };
 
     res.json(summary);
@@ -95,10 +123,20 @@ router.get('/', async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
+    // Populate current status from latest tracking event
+    const shipmentsWithStatus = await Promise.all(
+      shipments.map(async (shipment) => {
+        const shipmentObj = shipment.toObject();
+        const currentStatus = await shipment.getCurrentStatus();
+        shipmentObj.status = currentStatus;
+        return shipmentObj;
+      })
+    );
+
     const total = await Shipment.countDocuments(query);
 
     res.json({
-      shipments,
+      shipments: shipmentsWithStatus,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
@@ -111,6 +149,7 @@ router.get('/', async (req, res) => {
 // POST / - Create a new shipment
 router.post('/', async (req, res) => {
   const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes, pickupAddress, billingSameAsShipping } = req.body;
+  console.log('POST /shipments called with body:', req.body);
   if (!origin || !destination || !carrier || !weight) {
     return res.status(400).json({ message: 'Origin, destination, carrier, and weight are required' });
   }
@@ -118,7 +157,13 @@ router.post('/', async (req, res) => {
     const cost = parseFloat(weight) * 10;
     const trackingNumber = randomUUID();
     const orderId = 'ORD-' + Date.now();
-    const initialStatus = status || 'draft';
+    const initialStatus = status || 'DRAFT';
+
+    // Validate initial status
+    if (!SHIPMENT_STATUSES.includes(initialStatus)) {
+      return res.status(400).json({ message: `Invalid status: ${initialStatus}. Valid statuses: ${SHIPMENT_STATUSES.join(', ')}` });
+    }
+    console.log('Creating shipment with orderId:', orderId);
     const shipment = new Shipment({
       orderId,
       trackingNumber,
@@ -127,7 +172,6 @@ router.post('/', async (req, res) => {
       carrier,
       weight,
       cost,
-      status: initialStatus,
       customerInfo,
       productInfo,
       orderNotes,
@@ -136,14 +180,30 @@ router.post('/', async (req, res) => {
       user: req.user._id,
       statusHistory: [{ status: initialStatus, note: 'Order created' }]
     });
+    console.log('Shipment _id:', shipment._id);
+    // Create initial tracking event
+    const initialTrackingEvent = new TrackingEvent({
+      shipment: shipment._id,
+      eventCode: initialStatus,
+      description: 'Order created',
+      source: 'system'
+    });
+    console.log('Saving tracking event');
+    await initialTrackingEvent.save();
+    console.log('Tracking event saved');
+    console.log('Saving shipment');
     await shipment.save();
+    console.log('Shipment saved');
     const billing = new Billing({
       shipment: shipment._id,
       amount: cost
     });
+    console.log('Saving billing');
     await billing.save();
+    console.log('Billing saved');
     res.status(201).json(shipment);
   } catch (err) {
+    console.error('Error in POST /shipments:', err);
     if (err.code === 11000) {
       res.status(400).json({ message: 'Tracking number already exists' });
     } else {
@@ -210,12 +270,25 @@ router.get('/dashboard-summary', async (req, res) => {
       }
     });
 
+    const shipmentIds = shipments.map(s => s._id);
+    let statusCounts = {};
+    if (shipmentIds.length > 0) {
+      const aggResult = await TrackingEvent.aggregate([
+        { $match: { shipment: { $in: shipmentIds } } },
+        { $sort: { shipment: 1, timestamp: -1 } },
+        { $group: { _id: "$shipment", latestEvent: { $first: "$eventCode" } } },
+        { $group: { _id: "$latestEvent", count: { $sum: 1 } } }
+      ]);
+      aggResult.forEach(item => {
+        statusCounts[item._id] = item.count;
+      });
+    }
     const summary = {
       allOrders: shipments.length,
-      draftedOrders: shipments.filter(s => s.status === 'draft').length,
-      pendingForLabel: shipments.filter(s => s.status === 'pending-label').length,
-      packedOrders: shipments.filter(s => s.status === 'packed').length,
-      dispatchedOrders: shipments.filter(s => s.status === 'dispatched').length,
+      draftedOrders: statusCounts['DRAFT'] || 0,
+      pendingForLabel: statusCounts['BOOKED'] || 0,
+      packedOrders: statusCounts['PACKED'] || 0,
+      dispatchedOrders: statusCounts['DISPATCHED'] || 0,
       awbStockRemaining: totalAwbStock,
       creditBalance: creditBalance
     };
@@ -260,11 +333,21 @@ router.get('/ops-metrics', async (req, res) => {
 
     const shipments = await Shipment.find(query);
 
+    // Populate current status from latest tracking event
+    const shipmentsWithStatus = await Promise.all(
+      shipments.map(async (shipment) => {
+        const shipmentObj = shipment.toObject();
+        const currentStatus = await shipment.getCurrentStatus();
+        shipmentObj.status = currentStatus;
+        return shipmentObj;
+      })
+    );
+
     const metrics = {
-      bookingCount: shipments.length,
-      deliveredCount: shipments.filter(s => s.status === 'delivered').length,
-      pendingCount: shipments.filter(s => ['draft', 'pending-label', 'packed'].includes(s.status)).length,
-      recentShipments: shipments
+      bookingCount: shipmentsWithStatus.length,
+      deliveredCount: shipmentsWithStatus.filter(s => s.status === 'DELIVERED').length,
+      pendingCount: shipmentsWithStatus.filter(s => ['DRAFT', 'BOOKED', 'PACKED'].includes(s.status)).length,
+      recentShipments: shipmentsWithStatus
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
         .map(s => ({
@@ -301,9 +384,19 @@ router.get('/export', async (req, res) => {
 
     const shipments = await Shipment.find(query).sort({ createdAt: -1 });
 
+    // Populate current status from latest tracking event
+    const shipmentsWithStatus = await Promise.all(
+      shipments.map(async (shipment) => {
+        const shipmentObj = shipment.toObject();
+        const currentStatus = await shipment.getCurrentStatus();
+        shipmentObj.status = currentStatus;
+        return shipmentObj;
+      })
+    );
+
     // Create CSV content
     const csvHeaders = 'Order ID,Tracking Number,Status,Origin,Destination,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
-    const csvRows = shipments.map(shipment =>
+    const csvRows = shipmentsWithStatus.map(shipment =>
       `${shipment.orderId},${shipment.trackingNumber},${shipment.status},${shipment.origin},${shipment.destination},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
     ).join('\n');
 
@@ -325,22 +418,46 @@ router.get('/:id/label', async (req, res) => {
       return res.status(404).json({ message: 'Shipment not found' });
     }
 
-    // Mock label generation - in real app, this would generate a PDF or image
+    // Check if label has been generated (AWB assigned)
+    if (!shipment.awbNumber || !shipment.labelGeneratedAt) {
+      return res.status(400).json({ message: 'Label not generated yet. Please generate label first by updating status to LABEL_GENERATED.' });
+    }
+
+    // Generate label content with AWB
     const labelContent = `
       AWB Label
       Order ID: ${shipment.orderId}
-      Tracking: ${shipment.trackingNumber}
+      Tracking Number: ${shipment.trackingNumber}
+      AWB Number: ${shipment.awbNumber}
+      Carrier: ${shipment.carrier}
       From: ${shipment.origin}
       To: ${shipment.destination}
       Weight: ${shipment.weight}kg
+      Customer: ${shipment.customerInfo ? `${shipment.customerInfo.firstName} ${shipment.customerInfo.lastName}` : 'N/A'}
       Status: ${shipment.status}
+      Generated At: ${shipment.labelGeneratedAt.toISOString()}
     `;
 
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.trackingNumber}.txt"`);
+    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.awbNumber}.txt"`);
     res.send(labelContent);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/events - Retrieve tracking events for a shipment
+router.get('/:id/events', async (req, res) => {
+  try {
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    if (!shipment) {
+      return res.status(404).json({ message: 'Shipment not found' });
+    }
+
+    const events = await TrackingEvent.find({ shipment: req.params.id }).sort({ timestamp: 1 });
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -365,26 +482,73 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Shipment not found' });
     }
 
-    // Check if shipment is locked (label generated or manifest submitted)
-    if (shipment.labelGeneratedAt || shipment.manifestSubmittedAt) {
+    // Check if shipment is locked (manifest submitted)
+    if (shipment.manifestSubmittedAt) {
       return res.status(400).json({
-        message: 'Cannot edit shipment after label generation or manifest submission',
-        lockReason: shipment.labelGeneratedAt ? 'Label already generated' : 'Manifest already submitted'
+        message: 'Cannot edit shipment after manifest submission',
+        lockReason: 'Manifest already submitted'
       });
     }
 
-    const oldStatus = shipment.status;
+    const oldStatus = await shipment.getCurrentStatus();
+    const newStatus = req.body.status;
+
+    // Validate status transition
+    if (newStatus && newStatus !== oldStatus) {
+      if (!VALID_TRANSITIONS[oldStatus] || !VALID_TRANSITIONS[oldStatus].includes(newStatus)) {
+        return res.status(400).json({
+          message: `Invalid status transition from ${oldStatus} to ${newStatus}`,
+          validTransitions: VALID_TRANSITIONS[oldStatus] || []
+        });
+      }
+    }
+
     Object.assign(shipment, req.body);
 
     if (req.body.weight) {
       shipment.cost = parseFloat(req.body.weight) * 10;
     }
 
-    if (req.body.status && req.body.status !== oldStatus) {
+    // Handle label generation and AWB consumption
+    if (newStatus === 'LABEL_GENERATED' && oldStatus !== 'LABEL_GENERATED') {
+      // Find available AWB for the carrier
+      const carrier = await Carrier.findOne({ name: shipment.carrier });
+      if (!carrier) {
+        return res.status(400).json({ message: 'Carrier not found' });
+      }
+
+      const availableAwb = await AwbStock.findOne({ courierId: carrier._id, status: 'available' });
+      if (!availableAwb) {
+        return res.status(400).json({ message: 'No available AWB stock for this carrier' });
+      }
+
+      // Assign AWB to shipment
+      availableAwb.status = 'used';
+      availableAwb.assignedShipmentId = shipment._id;
+      availableAwb.updatedAt = new Date();
+      await availableAwb.save();
+
+      shipment.awbNumber = availableAwb.awbNumber;
+      shipment.labelGeneratedAt = new Date();
+    }
+
+    if (newStatus && newStatus !== oldStatus) {
       shipment.statusHistory.push({
-        status: req.body.status,
-        note: req.body.note || `Status changed from ${oldStatus} to ${req.body.status}`
+        status: newStatus,
+        note: req.body.note || `Status changed from ${oldStatus} to ${newStatus}`
       });
+
+      // Create tracking event
+      const trackingEvent = new TrackingEvent({
+        shipment: shipment._id,
+        eventCode: newStatus,
+        description: req.body.note || `Status changed to ${newStatus}`,
+        source: 'manual'
+      });
+      await trackingEvent.save();
+
+      // Process billing for the event
+      await processShipmentBilling(shipment._id, newStatus, req.user._id);
     }
 
     shipment.updatedAt = new Date();
@@ -429,7 +593,13 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
 
         const cost = parseFloat(data.weight) * 10;
         const trackingNumber = randomUUID();
-        const status = data.status || 'pending';
+        const status = data.status || 'DRAFT';
+
+        // Validate status
+        if (!SHIPMENT_STATUSES.includes(status)) {
+          errors.push({ row: shipments.length + 1, message: `Invalid status: ${status}` });
+          return;
+        }
 
         shipments.push({
           orderId: 'ORD-' + Date.now() + '-' + shipments.length,
@@ -439,7 +609,6 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
           carrier: data.carrier,
           weight: parseFloat(data.weight),
           cost,
-          status,
           user: req.user._id,
           statusHistory: [{ status, note: 'Bulk uploaded' }]
         });
@@ -454,6 +623,15 @@ router.post('/bulk', upload.single('file'), async (req, res) => {
 
         // Insert shipments
         const insertedShipments = await Shipment.insertMany(shipments);
+
+        // Create initial tracking events
+        const trackingEvents = insertedShipments.map(shipment => ({
+          shipment: shipment._id,
+          eventCode: shipment.statusHistory[0].status,
+          description: 'Bulk uploaded',
+          source: 'system'
+        }));
+        await TrackingEvent.insertMany(trackingEvents);
 
         // Create billings
         const billings = insertedShipments.map(shipment => ({
