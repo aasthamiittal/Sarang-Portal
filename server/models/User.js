@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   address: { type: String },
   profilePicture: { type: String }, // URL or path to image
   webhookUrl: { type: String }, // For webhook notifications
+  webhookSecret: { type: String }, // For webhook HMAC signing
   role: { type: String, enum: ['admin', 'manager', 'staff', 'user'], default: 'staff' },
   settings: {
     theme: { type: String, enum: ['light', 'dark'], default: 'light' },

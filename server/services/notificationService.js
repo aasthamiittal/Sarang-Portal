@@ -1,5 +1,7 @@
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+const crypto = require('crypto');
+const twilio = require('twilio'); // Assuming installed
 const User = require('../models/User');
 const NotificationTemplate = require('../models/NotificationTemplate');
 const ActivityLog = require('../models/ActivityLog');
@@ -44,19 +46,40 @@ async function sendEmail(to, subject, body) {
   });
 }
 
-// Send SMS (mocked)
+// Send SMS via Twilio
 async function sendSMS(to, message) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    throw new Error('Twilio credentials not configured');
+  }
+
+  const client = twilio(accountSid, authToken);
+
   await retryWithBackoff(async () => {
-    // Mock SMS sending
-    console.log(`SMS sent to ${to}: ${message}`);
-    // In real implementation, integrate with SMS provider
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: to
+    });
   });
 }
 
-// Send webhook
-async function sendWebhook(url, data) {
+// Send webhook with HMAC signature
+async function sendWebhook(url, data, secret) {
   await retryWithBackoff(async () => {
-    await axios.post(url, data, { timeout: 5000 });
+    const payload = JSON.stringify(data);
+    const signature = crypto.createHmac('sha256', secret || 'default-secret').update(payload).digest('hex');
+
+    await axios.post(url, data, {
+      timeout: 5000,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hook-Signature': `sha256=${signature}`
+      }
+    });
   });
 }
 
@@ -91,10 +114,34 @@ async function sendNotification(eventType, userId, data = {}) {
       try {
         if (channel === 'email' && user.email) {
           await sendEmail(user.email, subject, body);
+          // Log success
+          await ActivityLog.create({
+            user: userId,
+            action: 'notification_success',
+            description: `Successfully sent email notification for ${eventType}`,
+            ipAddress: '',
+            userAgent: ''
+          });
         } else if (channel === 'sms' && user.phone) {
           await sendSMS(user.phone, body);
+          // Log success
+          await ActivityLog.create({
+            user: userId,
+            action: 'notification_success',
+            description: `Successfully sent SMS notification for ${eventType}`,
+            ipAddress: '',
+            userAgent: ''
+          });
         } else if (channel === 'webhook' && user.webhookUrl) {
-          await sendWebhook(user.webhookUrl, { eventType, ...data });
+          await sendWebhook(user.webhookUrl, { eventType, ...data }, user.webhookSecret);
+          // Log success
+          await ActivityLog.create({
+            user: userId,
+            action: 'notification_success',
+            description: `Successfully sent webhook notification for ${eventType}`,
+            ipAddress: '',
+            userAgent: ''
+          });
         }
       } catch (error) {
         // Log failure to ActivityLog
@@ -102,7 +149,7 @@ async function sendNotification(eventType, userId, data = {}) {
           user: userId,
           action: 'notification_failure',
           description: `Failed to send ${channel} notification for ${eventType}: ${error.message}`,
-          ipAddress: '', // Can be added if available
+          ipAddress: '',
           userAgent: ''
         });
         console.error(`Notification failure for ${channel}:`, error);

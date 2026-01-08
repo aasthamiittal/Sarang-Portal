@@ -217,6 +217,23 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
+// GET /:id/pdf - Generate manifest PDF
+router.get('/:id/pdf', async (req, res) => {
+  try {
+    const manifest = await Manifest.findById(req.params.id).populate('shipments');
+    if (!manifest || !manifest.shipments || !manifest.shipments.every(s => s.user.toString() === req.user.id.toString())) {
+      return res.status(404).json({ message: 'Manifest not found' });
+    }
+
+    const pdfService = require('../services/pdfService');
+    const { filePath, documentId } = await pdfService.generateManifestPDF(manifest, manifest.shipments, req.user.id);
+
+    res.download(filePath, `manifest_${manifest._id}.pdf`);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /:id/report - Manifest report
 router.get('/:id/report', async (req, res) => {
   try {

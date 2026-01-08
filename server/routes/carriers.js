@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 
 // POST / - Create a new carrier
 router.post('/', async (req, res) => {
-  const { name, apiKey, trackingUrl, rules } = req.body;
+  const { name, apiKey, clientId, trackingUrl, rules } = req.body;
   if (!name) {
     return res.status(400).json({ message: 'Name is required' });
   }
@@ -25,7 +25,8 @@ router.post('/', async (req, res) => {
     const carrier = new Carrier({
       name,
       trackingUrl,
-      rules
+      rules,
+      clientId
     });
     if (apiKey) carrier.apiKey = apiKey;
     await carrier.save();

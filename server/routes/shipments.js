@@ -157,6 +157,12 @@ router.post('/', async (req, res) => {
   if (!origin || !destination || !weight) {
     return res.status(400).json({ message: 'Origin, destination, and weight are required' });
   }
+
+  // Check KYC status
+  if (req.user.kycStatus !== 'approved') {
+    return res.status(403).json({ message: 'KYC verification required before creating shipments. Please complete your KYC process.' });
+  }
+
   try {
     const cost = parseFloat(weight) * 10;
     const trackingNumber = randomUUID();
@@ -553,7 +559,7 @@ router.get('/export', async (req, res) => {
   }
 });
 
-// GET /:id/label - Generate AWB label
+// GET /:id/label - Generate AWB label PDF
 router.get('/:id/label', async (req, res) => {
   try {
     const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
@@ -566,24 +572,46 @@ router.get('/:id/label', async (req, res) => {
       return res.status(400).json({ message: 'Label not generated yet. Please generate label first by updating status to LABEL_GENERATED.' });
     }
 
-    // Generate label content with AWB
-    const labelContent = `
-      AWB Label
-      Order ID: ${shipment.orderId}
-      Tracking Number: ${shipment.trackingNumber}
-      AWB Number: ${shipment.awbNumber}
-      Carrier: ${shipment.carrier}
-      From: ${shipment.origin}
-      To: ${shipment.destination}
-      Weight: ${shipment.weight}kg
-      Customer: ${shipment.customerInfo ? `${shipment.customerInfo.firstName} ${shipment.customerInfo.lastName}` : 'N/A'}
-      Status: ${shipment.status}
-      Generated At: ${shipment.labelGeneratedAt.toISOString()}
-    `;
+    // Generate PDF label
+    const pdfService = require('../services/pdfService');
+    const { filePath, documentId } = await pdfService.generateShippingLabel(shipment, req.user._id);
 
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="label-${shipment.awbNumber}.txt"`);
-    res.send(labelContent);
+    res.download(filePath, `shipping_label_${shipment.orderId}.pdf`);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/customs-invoice - Generate customs invoice PDF
+router.get('/:id/customs-invoice', async (req, res) => {
+  try {
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    if (!shipment) {
+      return res.status(404).json({ message: 'Shipment not found' });
+    }
+
+    const pdfService = require('../services/pdfService');
+    const { filePath, documentId } = await pdfService.generateCustomsInvoice(shipment, req.user._id);
+
+    res.download(filePath, `customs_invoice_${shipment.orderId}.pdf`);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/billing-invoice - Generate billing invoice PDF
+router.get('/:id/billing-invoice', async (req, res) => {
+  try {
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    const billing = await Billing.findOne({ shipment: req.params.id });
+    if (!shipment || !billing) {
+      return res.status(404).json({ message: 'Shipment or billing not found' });
+    }
+
+    const pdfService = require('../services/pdfService');
+    const { filePath, documentId } = await pdfService.generateBillingInvoice(billing, shipment, req.user._id);
+
+    res.download(filePath, `billing_invoice_${billing._id}.pdf`);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -711,6 +739,13 @@ router.put('/:id', async (req, res) => {
           reason: req.body.reason || 'Delivery failed'
         });
         await ndrCase.save();
+
+        // Auto-notify customer on NDR
+        await sendNotification('ndr_created', req.user._id, {
+          shipmentId: shipment.orderId,
+          reason: ndrCase.reason,
+          customerEmail: shipment.customerInfo?.email
+        });
 
         // Apply automation rules for NDR action
         await automationEngine.evaluateRules('NDR_ACTION', {

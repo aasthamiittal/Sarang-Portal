@@ -1,28 +1,28 @@
 # Frontend Structure Analysis
 
 ## Overview
-The frontend is a React-based single-page application (SPA) built with Vite, using React Router for navigation, Material-UI and Tailwind CSS for styling, and Axios for API communication. It provides a comprehensive dashboard for managing shipments, billing, integrations, and administrative functions in a logistics/shipping management system. The app features role-based access control, real-time data fetching, and responsive design.
+The frontend is a production-ready React SPA built with Vite, React Router, Material-UI, and Tailwind CSS. It provides a comprehensive shipping management interface with real-time data, role-based access, and full integration with backend APIs for carrier management, document generation, and automated workflows.
 
 ## Routing Structure
 - **Root Route (/)**: Redirects to Login if not authenticated, otherwise to Dashboard.
 - **Authenticated Routes (/*)**: Wrapped in Layout component with sidebar navigation.
 - **Key Routes**:
-  - `/dashboard`: Main dashboard with summaries and metrics.
-  - `/shipments`: Shipment management (CRUD operations).
+  - `/dashboard`: Actionable dashboard with health cards, clickable widgets, system metrics.
+  - `/shipments`: Full shipment lifecycle management with PDF generation.
   - `/multi-box`: Multi-box shipment handling.
-  - `/manifests`: Manifest creation and management.
+  - `/manifests`: Manifest creation with PDF export.
   - `/pickup`: Pickup scheduling.
   - `/rate-comparison`: Rate calculator.
-  - `/bulk-report`: Bulk reporting.
-  - `/billing`: Wallet and billing management.
+  - `/bulk-report`: Bulk reporting with real PDF exports.
+  - `/billing`: Wallet and billing management with payment integration.
   - `/documents`: Document uploads and management.
   - `/integrations`: Third-party integrations.
   - `/request-quote`: Quote requests.
-  - `/profile`: User profile and settings.
-  - `/admin`: Administrative functions.
-  - `/finance`: Financial dashboard.
-  - `/notifications`: Notification management.
-  - `/ndr`: NDR (Non-Delivery Report) cases.
+  - `/profile`: User profile, settings, KYC verification.
+  - `/admin`: Administrative functions including KYC review.
+  - `/finance`: Financial dashboard with GST-compliant reports.
+  - `/notifications`: Complete notification management with real-time updates.
+  - `/ndr`: NDR cases with automated workflows.
   - Additional admin routes: `/audit-log`, `/kyc`.
 
 ## Authentication Flow
@@ -40,36 +40,36 @@ The frontend is a React-based single-page application (SPA) built with Vite, usi
 
 ## Key Views
 - **Login**: Form with email, password, terms checkbox; uses Material-UI components.
-- **Dashboard**: Comprehensive overview with order summaries, actions, wallet balance, recent shipments; fetches from multiple endpoints.
-- **Shipments**: List and manage shipments; includes ShipmentForm dialog for create/edit.
-- **ShipmentForm**: Modal dialog with nested fields for origin, destination, customer info, product details.
-- **Billing**: Wallet management, balance display, activity log.
-- **Profile**: User settings, KYC verification for users.
-- **Admin**: Administrative controls, audit logs.
-- **FinanceDashboard**: Financial metrics and reports.
-- **Notifications**: Notification preferences and history.
-- **Integrations**: Manage API integrations.
-- **Documents**: Upload and view documents.
-- **Manifests**: Create and track manifests.
+- **Dashboard**: Actionable overview with order summaries, health cards (carrier sync, wallet alerts, stuck shipments), clickable widgets for NDR/exceptions.
+- **Shipments**: List and manage shipments; includes ShipmentForm dialog for create/edit; PDF generation for labels/invoices.
+- **ShipmentForm**: Modal dialog with nested fields for origin, destination, customer info, product details; KYC validation.
+- **Billing**: Wallet management, balance display, activity log; payment gateway integration.
+- **Profile**: User settings, complete KYC verification workflow with document upload/resubmission.
+- **Admin**: Administrative controls, audit logs, KYC document review interface.
+- **FinanceDashboard**: Financial metrics and GST-compliant reports.
+- **Notifications**: Notification preferences, real-time updates, delivery status logging.
+- **Integrations**: Manage API integrations with real carrier connections.
+- **Documents**: Upload and view documents with PDF generation.
+- **Manifests**: Create and track manifests with PDF export.
 - **Pickup**: Schedule pickups.
-- **RateComparison**: Compare carrier rates.
+- **RateComparison**: Compare carrier rates with real API data.
 - **RequestQuote**: Submit quote requests.
-- **BulkReport**: Generate bulk reports.
+- **BulkReport**: Generate bulk reports with real PDF exports.
 - **MultiBox**: Handle multi-box shipments.
-- **NdrList**: Manage NDR cases.
+- **NdrList**: Manage NDR cases with automated escalation/RTO.
 
 ## Components
 - **Layout**: Main layout with sidebar and content area; handles responsive design.
 - **Sidebar**: Navigation menu with role-based items; collapsible on mobile.
 - **ErrorBoundary**: Catches and displays errors in child components.
-- **ExceptionWidgets**: Displays NDR and exception case counts with navigation links.
-- **NdrList**: List of NDR cases.
-- **NotificationPreferences**: Manage notification settings.
-- **Timeline**: Likely displays shipment tracking timeline.
+- **ExceptionWidgets**: Displays NDR and exception case counts with navigation links to filtered views.
+- **NdrList**: List of NDR cases with action buttons for reattempt/RTO/hold.
+- **NotificationPreferences**: Manage notification settings including SMS/webhook preferences.
+- **Timeline**: Displays shipment tracking timeline with real carrier data.
 
 ## Navigation
 - **Sidebar**: Fixed left sidebar with menu items filtered by user role (admin, manager, staff, user).
-- **Menu Items**: Dashboard, Orders, Multi Box, Manifests, Pickup, Rate Calculator, Bulk Report, Wallet, Documents, Integrations, Request Quote, Settings; admin adds Finance, Admin, Audit Log.
+- **Menu Items**: Dashboard, Orders, Multi Box, Manifests, Pickup, Rate Calculator, Bulk Report, Wallet, Documents, Integrations, Request Quote, Settings; admin adds Finance, Admin, Audit Log, KYC Review.
 - **Mobile**: Hamburger menu toggles sidebar overlay.
 - **Active State**: Highlights current route.
 - **Logout**: Button at bottom of sidebar.
@@ -79,7 +79,7 @@ The frontend is a React-based single-page application (SPA) built with Vite, usi
 - **Secondary Buttons**: White with border, hover gray; used for cancels, filters.
 - **Action Buttons**: Icons with text, hover backgrounds; in cards and lists.
 - **Form Elements**: Material-UI TextField, Checkbox, Select; Tailwind classes for consistency.
-- **Cards**: White backgrounds with shadows, clickable for navigation.
+- **Cards**: White backgrounds with shadows, clickable for navigation to detailed views.
 - **Icons**: Lucide React icons (ShoppingCart, Edit, etc.), Material-UI icons (Visibility, etc.).
 - **Responsive Grid**: Tailwind grid classes for different screen sizes.
 
@@ -88,10 +88,12 @@ The frontend is a React-based single-page application (SPA) built with Vite, usi
 - **Authentication**: Bearer token in headers for all requests.
 - **Key Endpoints**:
   - Auth: /auth/ (login, profile, settings, logout).
-  - Shipments: /shipments (CRUD, dashboard-summary, ops-metrics, actions-summary, bulk, export).
-  - Billing: /billing (CRUD, balance, activity, recharge).
+  - Shipments: /shipments (CRUD), /bulk, /export, /dashboard-summary, /ops-metrics, /:id/label, /:id/customs-invoice, /:id/billing-invoice, /:id/events.
+  - Billing: /billing (CRUD), /balance, /activity, /recharge.
+  - KYC: /kyc/upload, /documents, /status, /resubmit/:id.
+  - Admin: /admin/users, /kyc/pending, /kyc/:id/review.
   - Wallet: /wallet/balance, /wallet/activity.
-  - Notifications: /notifications/unread-count.
+  - Notifications: /notifications/unread-count, /preferences/me.
   - Tracking: /tracking/health.
   - Carriers, rates, manifests, pickups, documents, integrations, quotes, awb, customs, ledger, automation, webhooks, ndr, finance, reports.
 - **Data Fetching**: Axios with Promise.allSettled for parallel requests; error handling with fallbacks.
@@ -99,12 +101,13 @@ The frontend is a React-based single-page application (SPA) built with Vite, usi
 
 ## UI Flows
 1. **User Login**: Login form -> Authenticate -> Redirect to Dashboard.
-2. **Dashboard Overview**: Load summaries, metrics, activities -> Display cards and widgets -> Navigate to details on click.
-3. **Create Shipment**: Navigate to Shipments -> Open ShipmentForm dialog -> Fill form -> Submit -> Refresh list.
-4. **Manage Billing**: View balance and activity -> Recharge or view transactions.
-5. **Admin Functions**: Access restricted views based on role -> Perform admin tasks.
-6. **Notifications**: Bell icon shows unread count -> Click to view notifications.
-7. **Responsive Navigation**: Desktop sidebar -> Mobile hamburger menu.
+2. **KYC Verification**: Upload documents -> Check status -> Resubmit if rejected -> Unblock shipments.
+3. **Dashboard Overview**: Load summaries, health metrics -> Click widgets to navigate to filtered views.
+4. **Create Shipment**: Check KYC -> Navigate to Shipments -> Open ShipmentForm -> Fill form -> Submit -> Generate PDFs.
+5. **Manage Billing**: View balance and activity -> Recharge via payment gateway -> View transactions.
+6. **Admin Functions**: Access restricted views -> Review KYC documents -> Perform admin tasks.
+7. **Notifications**: Bell icon shows unread count -> Click to view notifications -> Manage preferences.
+8. **Responsive Navigation**: Desktop sidebar -> Mobile hamburger menu.
 
 ## Mermaid Diagram
 ```mermaid

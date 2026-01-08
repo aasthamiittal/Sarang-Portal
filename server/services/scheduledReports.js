@@ -3,6 +3,10 @@ const nodemailer = require('nodemailer');
 const Shipment = require('../models/Shipment');
 const AccountLedger = require('../models/AccountLedger');
 const User = require('../models/User');
+const NdrCase = require('../models/NdrCase');
+const TrackingEvent = require('../models/TrackingEvent');
+const Billing = require('../models/Billing');
+const { sendNotification } = require('./notificationService');
 
 // Email transporter (configure with your SMTP settings)
 const transporter = nodemailer.createTransport({
@@ -221,6 +225,12 @@ class ScheduledReports {
 
   // Start scheduled jobs
   start() {
+    // NDR automation every hour
+    const ndrJob = cron.schedule('0 * * * *', () => {
+      console.log('Running NDR automation...');
+      this.processNdrAutomation();
+    });
+
     // Weekly reports every Monday at 9 AM
     const weeklyJob = cron.schedule('0 9 * * 1', () => {
       console.log('Running weekly reports...');
@@ -233,8 +243,91 @@ class ScheduledReports {
       this.sendMonthlyReport();
     });
 
-    this.jobs = [weeklyJob, monthlyJob];
+    this.jobs = [ndrJob, weeklyJob, monthlyJob];
     console.log('Scheduled reports initialized');
+  }
+
+  // Process NDR automation
+  async processNdrAutomation() {
+    try {
+      console.log('Processing NDR automation...');
+
+      // Find NDR cases that need escalation or auto-RTO
+      const ndrCases = await NdrCase.find({
+        currentAction: { $ne: 'RTO' }, // Not already RTO
+        agingInHours: { $gte: 24 } // Older than 24 hours
+      }).populate('shipmentId');
+
+      for (const ndrCase of ndrCases) {
+        const shipment = ndrCase.shipmentId;
+        if (!shipment) continue;
+
+        // Auto-escalate after 48 hours
+        if (ndrCase.agingInHours >= 48 && ndrCase.escalationLevel < 2) {
+          ndrCase.escalationLevel += 1;
+          ndrCase.lastEscalationAt = new Date();
+          ndrCase.history.push({
+            action: 'AUTO_ESCALATE',
+            notes: `Auto-escalated to level ${ndrCase.escalationLevel}`
+          });
+          await ndrCase.save();
+
+          // Notify user of escalation
+          await sendNotification('ndr_escalated', shipment.user, {
+            shipmentId: shipment.orderId,
+            escalationLevel: ndrCase.escalationLevel
+          });
+        }
+
+        // Auto-RTO after 7 days (168 hours)
+        if (ndrCase.agingInHours >= 168 && !ndrCase.autoRtoAt) {
+          ndrCase.autoRtoAt = new Date();
+          ndrCase.currentAction = 'RTO';
+          ndrCase.history.push({
+            action: 'AUTO_RTO',
+            notes: 'Auto-initiated RTO due to timeout'
+          });
+          await ndrCase.save();
+
+          // Update shipment to RTO
+          shipment.statusHistory.push({
+            status: 'RTO_INITIATED',
+            note: 'Auto-RTO initiated'
+          });
+          await shipment.save();
+
+          // Create tracking event
+          const trackingEvent = new TrackingEvent({
+            shipment: shipment._id,
+            eventCode: 'RTO_INITIATED',
+            description: 'Auto-RTO initiated due to NDR timeout',
+            source: 'system'
+          });
+          await trackingEvent.save();
+
+          // Add RTO cost
+          const rtoCost = shipment.cost * 0.5;
+          shipment.cost += rtoCost;
+
+          const billing = new Billing({
+            shipment: shipment._id,
+            amount: rtoCost,
+            description: 'Auto-RTO Processing Fee'
+          });
+          await billing.save();
+
+          // Notify user
+          await sendNotification('auto_rto_initiated', shipment.user, {
+            shipmentId: shipment.orderId,
+            rtoCost: rtoCost.toFixed(2)
+          });
+        }
+      }
+
+      console.log('NDR automation processing completed');
+    } catch (error) {
+      console.error('Error in NDR automation:', error);
+    }
   }
 
   // Stop all scheduled jobs

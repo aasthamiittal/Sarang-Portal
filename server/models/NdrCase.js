@@ -13,8 +13,18 @@ const ndrCaseSchema = new mongoose.Schema({
   severity: { type: String, enum: ['low', 'medium', 'high'] },
   agingInHours: { type: Number },
   escalationLevel: { type: Number, default: 0 },
+  lastEscalationAt: { type: Date },
+  autoRtoAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+});
+
+// Pre-save hook to calculate aging
+ndrCaseSchema.pre('save', function(next) {
+  if (this.isNew || this.isModified()) {
+    this.agingInHours = Math.floor((Date.now() - this.createdAt) / (1000 * 60 * 60));
+  }
+  next();
 });
 
 module.exports = mongoose.model('NdrCase', ndrCaseSchema);

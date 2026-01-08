@@ -85,7 +85,7 @@ router.delete('/templates/:id', async (req, res) => {
 // Get current user preferences
 router.get('/preferences/me', async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('notificationPreferences webhookUrl');
+    const user = await User.findById(req.user._id).select('notificationPreferences webhookUrl webhookSecret');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
@@ -96,12 +96,12 @@ router.get('/preferences/me', async (req, res) => {
 // Update current user preferences
 router.put('/preferences/me', async (req, res) => {
   try {
-    const { notificationPreferences, webhookUrl } = req.body;
+    const { notificationPreferences, webhookUrl, webhookSecret } = req.body;
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { notificationPreferences, webhookUrl, updatedAt: new Date() },
+      { notificationPreferences, webhookUrl, webhookSecret, updatedAt: new Date() },
       { new: true }
-    ).select('notificationPreferences webhookUrl');
+    ).select('notificationPreferences webhookUrl webhookSecret');
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {

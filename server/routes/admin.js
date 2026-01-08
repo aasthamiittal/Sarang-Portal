@@ -2,6 +2,7 @@ const express = require('express');
 const requireAdmin = require('../middleware/auth').requireAdmin;
 const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
+const KycDocument = require('../models/KycDocument');
 
 const router = express.Router();
 
@@ -121,6 +122,77 @@ router.get('/activity-logs', async (req, res) => {
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       total
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// KYC Management
+
+// Get pending KYC documents
+router.get('/kyc/pending', async (req, res) => {
+  try {
+    const documents = await KycDocument.find({ status: 'pending' })
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
+    res.json(documents);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Review KYC document
+router.post('/kyc/:documentId/review', async (req, res) => {
+  try {
+    const { status, rejectionReason, gstNumber, panNumber, iecNumber } = req.body;
+
+    const document = await KycDocument.findById(req.params.documentId).populate('userId');
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    document.status = status;
+    document.verifiedBy = req.user._id;
+    document.verifiedAt = new Date();
+
+    if (status === 'rejected' && rejectionReason) {
+      document.rejectionReason = rejectionReason;
+    }
+
+    await document.save();
+
+    // Update user KYC status and details
+    const user = document.userId;
+    if (gstNumber) user.gstNumber = gstNumber;
+    if (panNumber) user.panNumber = panNumber;
+    if (iecNumber) user.iecNumber = iecNumber;
+
+    // Check if all required documents are approved
+    const allDocuments = await KycDocument.find({ userId: user._id });
+    const requiredTypes = ['gst', 'pan', 'iec'];
+    const approvedRequired = requiredTypes.every(type =>
+      allDocuments.some(doc => doc.documentType === type && doc.status === 'approved')
+    );
+
+    user.kycStatus = approvedRequired ? 'approved' : 'pending';
+    await user.save();
+
+    res.json({ message: 'KYC document reviewed successfully', document });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user KYC details
+router.get('/users/:userId/kyc', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('name email kycStatus gstNumber panNumber iecNumber');
+    const documents = await KycDocument.find({ userId: req.params.userId });
+
+    res.json({
+      user,
+      documents
     });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });

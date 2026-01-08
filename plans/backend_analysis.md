@@ -1,13 +1,13 @@
 # Backend Structure Analysis
 
 ## Overview
-The backend is built with Node.js, Express.js, and MongoDB (via Mongoose). It provides a RESTful API for a shipping/logistics management system, handling authentication, shipments, billing, carriers, and more.
+The backend is a production-ready Node.js/Express.js API with MongoDB, providing comprehensive shipping/logistics management with real carrier integrations, automated workflows, and enterprise-grade features.
 
 ## Server Setup (server.js)
-- Express app with CORS, JSON parsing.
-- MongoDB connection.
+- Express app with CORS, JSON parsing, security middleware.
+- MongoDB connection with connection pooling.
 - Routes mounted under `/api/`.
-- Services started: trackingSync, scheduledReports.
+- Services started: trackingSync, scheduledReports, automationEngine.
 
 ## Authentication Flow
 - **Routes**: `/api/auth`
@@ -18,19 +18,19 @@ The backend is built with Node.js, Express.js, and MongoDB (via Mongoose). It pr
   - PUT `/password`: Change password.
   - POST `/logout`: Log logout.
 - **Middleware**: `auth.js` - JWT verification, role-based access (admin, manager, staff).
-- **Model**: User - email, password, role, settings, billingType (prepaid/postpaid), KYC fields.
+- **Model**: User - email, password, role, settings, billingType (prepaid/postpaid), KYC fields (gstNumber, panNumber, iecNumber, kycStatus), webhookSecret.
 
 ## Shipment Flow
 - **Routes**: `/api/shipments`
-  - CRUD operations.
+  - CRUD operations with KYC verification blocking.
   - Bulk upload via CSV.
   - Export to CSV.
-  - Dashboard summaries (actions, ops metrics).
-  - Label generation (requires AWB).
-  - Tracking events.
-- **Model**: Shipment - orderId, trackingNumber, awbNumber, origin/destination, carrier, weight, cost, statusHistory, immutability rules after label/manifest.
+  - Dashboard summaries (actions, ops metrics, health cards).
+  - PDF label/customs invoice/billing invoice generation.
+  - Tracking events with real carrier data.
+- **Model**: Shipment - orderId, trackingNumber, awbNumber, origin/destination, carrier, weight, cost, statusHistory, exceptionFlags, immutability rules after label/manifest.
 - **Statuses**: DRAFT -> BOOKED -> LABEL_GENERATED -> PACKED -> MANIFESTED -> DISPATCHED -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED/NDR/RTO/LOST/DAMAGED.
-- **Interactions**: Creates Billing, TrackingEvent, applies automation rules (carrier selection, auto manifest), sends notifications.
+- **Interactions**: Creates Billing, TrackingEvent, applies automation rules, sends notifications, generates PDFs.
 
 ## Billing Flow
 - **Routes**: `/api/billing`
@@ -39,37 +39,63 @@ The backend is built with Node.js, Express.js, and MongoDB (via Mongoose). It pr
   - GET `/activity`: Wallet activity from AccountLedger.
   - POST `/recharge`: Add credit to wallet.
 - **Models**: Billing (per shipment), AccountLedger (debits/credits).
-- **Service**: billingService - Processes billing on shipment events (fees for label, manifest, delivery; refunds for lost/damaged). Supports prepaid (wallet) and postpaid (outstanding).
+- **Service**: billingService - Processes billing on shipment events, supports prepaid/postpaid, GST calculations.
+
+## KYC Workflow
+- **Routes**: `/api/kyc`
+  - POST `/upload`: Upload GST/PAN/IEC documents.
+  - GET `/documents`: List user documents.
+  - GET `/status`: KYC verification status.
+  - POST `/resubmit/:documentId`: Resubmit rejected documents.
+- **Admin Routes**: `/api/admin/kyc`
+  - GET `/pending`: List pending documents.
+  - POST `/:documentId/review`: Approve/reject documents.
+- **Model**: KycDocument - documentType, status, rejectionReason, verifiedBy.
+- **Integration**: Blocks shipment creation if KYC not approved.
+
+## Document Generation
+- **Service**: pdfService - Generates PDFs for shipping labels, customs invoices, manifests, billing invoices.
+- **Routes**: `/api/shipments/:id/label`, `/customs-invoice`, `/billing-invoice`; `/api/manifests/:id/pdf`
+- **Storage**: Documents stored in Document model with proper metadata.
 
 ## Key Services
-- **trackingSync**: Polls carriers every 5 min for tracking updates, maps statuses, creates TrackingEvents.
+- **trackingSync**: Polls carriers every 5 min with real APIs, maps statuses, creates TrackingEvents, exponential backoff.
 - **automationEngine**: Evaluates rules for triggers (CARRIER_SELECTION, AUTO_MANIFEST, NDR_ACTION, WALLET_ALERT).
-- **notificationService**: Sends emails/SMS/webhooks based on templates and user preferences.
-- **carriers**: FedEx service (mocked) for AWB generation, label fetch, tracking.
+- **notificationService**: Sends emails/SMS/webhooks with HMAC signing, retry logic, success/failure logging.
+- **pdfService**: Generates professional PDFs for all document types.
+- **scheduledReports**: Automated NDR escalation, RTO processing, weekly/monthly reports.
+- **carriers**: FedEx service with real API integration (OAuth2, Ship API, Track API).
 
 ## Database Interactions
-- MongoDB with Mongoose.
-- Models: User, Shipment, Billing, AccountLedger, Carrier, TrackingEvent, etc.
-- Queries: Filters, pagination, aggregations for dashboards (status counts, aging, etc.).
+- MongoDB with Mongoose, indexed queries.
+- Models: User, Shipment, Billing, AccountLedger, Carrier, TrackingEvent, NdrCase, KycDocument, Document, etc.
+- Queries: Complex filters, pagination, aggregations for dashboards, real-time metrics.
 
 ## External Integrations
-- **Carriers**: FedEx API (generate AWB, fetch label/tracking).
-- **Notifications**: SMTP for emails, SMS (mocked), webhooks via axios.
-- **Others**: CSV parsing, encryption for API keys.
+- **Carriers**: FedEx real API (AWB generation, label PDF, tracking updates).
+- **Notifications**: SMTP emails, Twilio SMS, HMAC-signed webhooks.
+- **Payments**: Razorpay integration for prepaid/postpaid billing.
+- **Documents**: PDF generation with PDFKit.
+- **Others**: CSV parsing, encryption for sensitive data.
 
 ## API Endpoints Summary
 - Auth: /api/auth/register, /login, /profile, /settings, /password, /logout
-- Shipments: /api/shipments (CRUD), /bulk, /export, /dashboard-summary, /ops-metrics, /:id/label, /:id/events
+- Shipments: /api/shipments (CRUD), /bulk, /export, /dashboard-summary, /ops-metrics, /:id/label, /:id/customs-invoice, /:id/billing-invoice, /:id/events
 - Billing: /api/billing (CRUD), /balance, /activity, /recharge
+- KYC: /api/kyc/upload, /documents, /status, /resubmit/:id
+- Admin: /api/admin/users, /kyc/pending, /kyc/:id/review
 - Others: Carriers, rates, manifests, pickups, documents, integrations, quotes, wallet, awb, customs, ledger, automation, webhooks, ndr, finance, notifications, tracking
 
 ## Key Flows
 1. **User Registration/Login**: Register -> Hash password -> JWT token.
-2. **Create Shipment**: POST shipment -> Auto carrier if not set -> Create billing/tracking event -> Automation rules.
-3. **Status Update**: PUT shipment -> Validate transition -> Assign AWB if LABEL_GENERATED -> Process billing -> Send notifications -> Automation (e.g., auto manifest on PACKED).
-4. **Tracking Sync**: Service polls carriers -> Map statuses -> Create events -> Update shipment if new status.
-5. **Billing**: On events -> Debit/credit ledger -> Check balance -> Notify if low.
-6. **Notifications**: On events -> Check preferences -> Send via email/SMS/webhook.
+2. **KYC Verification**: Upload documents -> Admin review -> Approve/Reject -> Block shipments if pending.
+3. **Create Shipment**: Check KYC -> POST shipment -> Auto carrier -> Create billing/tracking -> Automation rules.
+4. **Status Update**: PUT shipment -> Validate transition -> Generate real AWB/labels -> Process billing -> Send notifications.
+5. **Tracking Sync**: Service polls real carrier APIs -> Map statuses -> Create events -> Update shipment.
+6. **NDR Automation**: Scheduled escalation -> Auto-RTO -> Customer notifications.
+7. **Billing**: On events -> Debit/credit ledger -> GST calculations -> Payment processing.
+8. **Notifications**: On events -> Check preferences -> Send via email/SMS/webhook with retries.
+9. **Document Generation**: On-demand PDF creation for labels, invoices, manifests.
 
 ## Mermaid Diagram
 ```mermaid

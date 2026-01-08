@@ -4,6 +4,7 @@ const { encrypt, decrypt } = require('../services/encryption');
 const carrierSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   encryptedApiKey: { type: String },
+  clientId: { type: String }, // For OAuth2
   trackingUrl: { type: String },
   rules: {
     minWeight: { type: Number, default: 0 },
