@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { calculateBalance, getWalletActivity } = require('../services/billingService');
 
 router.use(auth);
@@ -9,7 +9,22 @@ router.use(auth);
 router.get('/balance', async (req, res) => {
   try {
     const balance = await calculateBalance(req.user.id);
-    res.json({ balance });
+
+    // Calculate average daily debit from last 14 days
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+    const debits = await AccountLedger.find({
+      user: req.user.id,
+      type: 'debit',
+      createdAt: { $gte: fourteenDaysAgo }
+    });
+
+    const totalDebit = debits.reduce((sum, debit) => sum + debit.amount, 0);
+    const avgDailyDebit = totalDebit / 14;
+    const daysLeft = avgDailyDebit > 0 ? balance / avgDailyDebit : null;
+
+    res.json({ balance, avgDailyDebit, daysLeft });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

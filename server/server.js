@@ -13,7 +13,13 @@ app.use(express.json());
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
+  .then(() => {
+    console.log('MongoDB connected');
+    // Start tracking sync service
+    trackingSyncService.start();
+    // Start scheduled reports service
+    scheduledReports.start();
+  })
   .catch(err => {
     console.error('MongoDB connection error:', err);
     process.exit(1);
@@ -42,6 +48,13 @@ const awbRoutes = require('./routes/awb');
 const customsRoutes = require('./routes/customs');
 const ledgerRoutes = require('./routes/ledger');
 const automationRoutes = require('./routes/automation');
+const webhookRoutes = require('./routes/webhooks');
+const ndrRoutes = require('./routes/ndr');
+const financeRoutes = require('./routes/finance');
+const notificationsRoutes = require('./routes/notifications');
+const trackingRoutes = require('./routes/tracking');
+const trackingSyncService = require('./services/trackingSync');
+const scheduledReports = require('./services/scheduledReports');
 
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/manifests', manifestRoutes);
@@ -59,6 +72,11 @@ app.use('/api/awb', awbRoutes);
 app.use('/api/customs', customsRoutes);
 app.use('/api/ledger', ledgerRoutes);
 app.use('/api/automation', automationRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/ndr', ndrRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 5000;

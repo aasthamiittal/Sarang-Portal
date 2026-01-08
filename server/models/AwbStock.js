@@ -11,6 +11,5 @@ const awbStockSchema = new mongoose.Schema({
 
 // Indexes for performance
 awbStockSchema.index({ courierId: 1, status: 1 });
-awbStockSchema.index({ awbNumber: 1 });
 
 module.exports = mongoose.model('AwbStock', awbStockSchema);

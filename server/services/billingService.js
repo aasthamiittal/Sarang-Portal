@@ -1,6 +1,9 @@
 const AccountLedger = require('../models/AccountLedger');
 const Billing = require('../models/Billing');
 const Shipment = require('../models/Shipment');
+const User = require('../models/User');
+const automationEngine = require('./automationEngine');
+const { sendNotification } = require('./notificationService');
 
 // Billing triggers based on shipment events
 const BILLING_TRIGGERS = {
@@ -57,21 +60,72 @@ async function processShipmentBilling(shipmentId, eventCode, userId) {
 
     const amount = shipment.cost * trigger.amountMultiplier;
 
-    // Calculate current balance for balanceAfter
-    const currentBalance = await calculateBalance(userId);
+    const user = await User.findById(userId);
+    if (!user) return;
 
-    // Create ledger entry
-    const ledgerEntry = new AccountLedger({
-      user: userId,
-      type: trigger.type,
-      amount: Math.abs(amount),
-      referenceType: 'shipment',
-      referenceId: shipmentId,
-      description: `${trigger.description} - ${shipment.orderId}`,
-      balanceAfter: trigger.type === 'credit' ? currentBalance + amount : currentBalance - amount
-    });
+    if (user.billingType === 'postpaid') {
+      // For postpaid, accumulate in currentOutstanding
+      if (trigger.type === 'debit') {
+        if (user.currentOutstanding + amount > user.creditLimit) {
+          console.log(`Postpaid billing denied for user ${userId}: credit limit exceeded`);
+          return; // Or send notification
+        }
+        user.currentOutstanding += amount;
+      } else {
+        // For credits, reduce outstanding
+        user.currentOutstanding -= amount;
+        if (user.currentOutstanding < 0) user.currentOutstanding = 0;
+      }
+      await user.save();
 
-    await ledgerEntry.save();
+      // Still create ledger entry for tracking
+      const currentBalance = await calculateBalance(userId);
+      const ledgerEntry = new AccountLedger({
+        user: userId,
+        type: trigger.type,
+        amount: Math.abs(amount),
+        referenceType: 'shipment',
+        referenceId: shipmentId,
+        description: `${trigger.description} - ${shipment.orderId}`,
+        balanceAfter: trigger.type === 'credit' ? currentBalance + amount : currentBalance - amount
+      });
+      await ledgerEntry.save();
+
+    } else {
+      // Prepaid logic
+      const currentBalance = await calculateBalance(userId);
+
+      // Create ledger entry
+      const ledgerEntry = new AccountLedger({
+        user: userId,
+        type: trigger.type,
+        amount: Math.abs(amount),
+        referenceType: 'shipment',
+        referenceId: shipmentId,
+        description: `${trigger.description} - ${shipment.orderId}`,
+        balanceAfter: trigger.type === 'credit' ? currentBalance + amount : currentBalance - amount
+      });
+
+      await ledgerEntry.save();
+
+      // Trigger notification for wallet low balance
+      if (ledgerEntry.balanceAfter < 100) {
+        await sendNotification('wallet_low_balance', userId, {
+          userName: user.name,
+          balance: ledgerEntry.balanceAfter
+        });
+      }
+
+      // Apply automation rules for wallet alert on billing events
+      await automationEngine.evaluateRules('WALLET_ALERT', {
+        userId: userId,
+        data: {
+          balance: ledgerEntry.balanceAfter,
+          amount: amount,
+          type: trigger.type
+        }
+      });
+    }
 
     // Update billing record if exists
     const billing = await Billing.findOne({ shipment: shipmentId });

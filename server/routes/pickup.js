@@ -1,6 +1,7 @@
 const express = require('express');
 const Pickup = require('../models/Pickup');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+const { sendNotification } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -80,6 +81,15 @@ router.put('/:id/schedule', auth, async (req, res) => {
     pickup.courier = courier;
     pickup.timeline.push({ status: 'SCHEDULED', note: 'Pickup scheduled' });
     await pickup.save();
+
+    // Trigger notification for pickup scheduled
+    await sendNotification('pickup_scheduled', req.user.id, {
+      userName: req.user.name,
+      pickupId: pickup.orderId,
+      pickupLocation: pickup.pickupLocation,
+      preferredSlot: pickup.preferredSlot
+    });
+
     res.json(pickup);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });

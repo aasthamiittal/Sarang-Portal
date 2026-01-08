@@ -3,6 +3,7 @@ import { TextField, Button, Card, CardContent, Typography, Avatar, Grid, Switch,
 import { Lock, Security, People, VerifiedUser } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import NotificationPreferences from '../components/NotificationPreferences';
 
 const Profile = () => {
   const { user, updateProfile, updateSettings, token } = useAuth();

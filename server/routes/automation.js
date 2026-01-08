@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const AutomationRule = require('../models/AutomationRule');
 const Carrier = require('../models/Carrier');
 const Shipment = require('../models/Shipment');
@@ -11,7 +11,6 @@ router.use(auth);
 router.get('/rules', async (req, res) => {
   try {
     const rules = await AutomationRule.find({ user: req.user.id })
-      .populate('actions.courierId')
       .sort({ priority: -1, createdAt: -1 });
 
     res.json(rules);
@@ -25,17 +24,8 @@ router.post('/rules', async (req, res) => {
   try {
     const ruleData = { ...req.body, user: req.user.id };
 
-    // Validate courier if specified
-    if (ruleData.actions?.courierId) {
-      const carrier = await Carrier.findById(ruleData.actions.courierId);
-      if (!carrier) {
-        return res.status(404).json({ message: 'Courier not found' });
-      }
-    }
-
     const rule = new AutomationRule(ruleData);
     await rule.save();
-    await rule.populate('actions.courierId');
 
     res.status(201).json(rule);
   } catch (error) {
@@ -51,18 +41,9 @@ router.put('/rules/:id', async (req, res) => {
       return res.status(404).json({ message: 'Rule not found' });
     }
 
-    // Validate courier if specified
-    if (req.body.actions?.courierId) {
-      const carrier = await Carrier.findById(req.body.actions.courierId);
-      if (!carrier) {
-        return res.status(404).json({ message: 'Courier not found' });
-      }
-    }
-
     Object.assign(rule, req.body);
     rule.updatedAt = new Date();
     await rule.save();
-    await rule.populate('actions.courierId');
 
     res.json(rule);
   } catch (error) {
@@ -94,10 +75,10 @@ router.post('/apply', async (req, res) => {
       return res.status(404).json({ message: 'Shipment not found' });
     }
 
-    // Get active rules for this user and type
+    // Get active rules for this user and ruleType
     const rules = await AutomationRule.find({
       user: req.user.id,
-      type: ruleType,
+      ruleType: ruleType,
       isActive: true
     }).sort({ priority: -1 });
 
@@ -162,9 +143,11 @@ router.get('/settings', async (req, res) => {
   try {
     const rules = await AutomationRule.find({ user: req.user.id, isActive: true });
     const settings = {
-      courierSelectionEnabled: rules.some(r => r.type === 'courier_selection'),
-      labelGenerationEnabled: rules.some(r => r.type === 'label_generation'),
-      manifestGroupingEnabled: rules.some(r => r.type === 'manifest_grouping')
+      carrierSelectionEnabled: rules.some(r => r.ruleType === 'CARRIER_SELECTION'),
+      autoPickupEnabled: rules.some(r => r.ruleType === 'AUTO_PICKUP'),
+      autoManifestEnabled: rules.some(r => r.ruleType === 'AUTO_MANIFEST'),
+      ndrActionEnabled: rules.some(r => r.ruleType === 'NDR_ACTION'),
+      walletAlertEnabled: rules.some(r => r.ruleType === 'WALLET_ALERT')
     };
 
     res.json(settings);

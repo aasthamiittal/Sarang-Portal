@@ -11,8 +11,10 @@ const SHIPMENT_STATUSES = [
   'IN_TRANSIT',
   'OUT_FOR_DELIVERY',
   'DELIVERED',
+  'NDR',
   'RTO_INITIATED',
   'RTO_IN_TRANSIT',
+  'RTO_COMPLETED',
   'RETURNED_TO_ORIGIN',
   'LOST',
   'DAMAGED',
@@ -27,11 +29,13 @@ const VALID_TRANSITIONS = {
   'PACKED': ['MANIFESTED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
   'MANIFESTED': ['DISPATCHED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
   'DISPATCHED': ['IN_TRANSIT', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
-  'IN_TRANSIT': ['OUT_FOR_DELIVERY', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
-  'OUT_FOR_DELIVERY': ['DELIVERED', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'IN_TRANSIT': ['OUT_FOR_DELIVERY', 'NDR', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
+  'OUT_FOR_DELIVERY': ['DELIVERED', 'NDR', 'RTO_INITIATED', 'LOST', 'DAMAGED'],
   'DELIVERED': [],
+  'NDR': ['REATTEMPT', 'RTO_INITIATED', 'HOLD'],
   'RTO_INITIATED': ['RTO_IN_TRANSIT'],
-  'RTO_IN_TRANSIT': ['RETURNED_TO_ORIGIN'],
+  'RTO_IN_TRANSIT': ['RTO_COMPLETED'],
+  'RTO_COMPLETED': [],
   'RETURNED_TO_ORIGIN': [],
   'LOST': [],
   'DAMAGED': [],
@@ -87,6 +91,10 @@ const shipmentSchema = new mongoose.Schema({
    carrier: { type: String, required: true },
    weight: { type: Number, required: true },
    cost: { type: Number },
+   carrierCost: { type: Number },
+   handlingCost: { type: Number },
+   expectedDelivery: { type: Date },
+   actualDelivery: { type: Date },
    pickupDate: { type: Date },
   dispatchDate: { type: Date },
   deliveryDate: { type: Date },
@@ -125,6 +133,7 @@ const shipmentSchema = new mongoose.Schema({
   manifestSubmittedAt: { type: Date },
   manifest: { type: mongoose.Schema.Types.ObjectId, ref: 'Manifest' },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  exceptionFlags: [{ type: String, enum: ['CUSTOMS_HOLD', 'DELIVERY_FAILED', 'SLA_BREACHED'] }],
   statusHistory: [{
     status: { type: String, enum: SHIPMENT_STATUSES },
     timestamp: { type: Date, default: Date.now },
@@ -133,6 +142,23 @@ const shipmentSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+// Virtual for margin calculation
+shipmentSchema.virtual('margin').get(function() {
+  if (this.cost && (this.carrierCost || this.handlingCost)) {
+    const totalCost = (this.carrierCost || 0) + (this.handlingCost || 0);
+    return this.cost - totalCost;
+  }
+  return null;
+});
+
+// Method to check SLA compliance
+shipmentSchema.methods.isSLACompliant = function() {
+  if (this.expectedDelivery && this.actualDelivery) {
+    return this.actualDelivery <= this.expectedDelivery;
+  }
+  return null; // Not yet determined
+};
 
 // Pre-save hook to enforce immutability after label generation and manifest submission
 shipmentSchema.pre('save', function(next) {

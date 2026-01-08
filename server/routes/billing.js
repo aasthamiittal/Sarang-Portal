@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const Billing = require('../models/Billing');
 const Shipment = require('../models/Shipment');
 const { calculateBalance, getWalletActivity } = require('../services/billingService');

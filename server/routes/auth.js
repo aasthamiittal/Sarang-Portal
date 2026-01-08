@@ -2,7 +2,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const auth = require('../middleware/auth');
+const ActivityLog = require('../models/ActivityLog');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -37,17 +38,42 @@ router.post('/', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
+      // Log failed login attempt
+      await ActivityLog.create({
+        user: null, // No user found
+        action: 'failed_login',
+        description: `Failed login attempt for email: ${email}`,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      // Log failed login attempt
+      await ActivityLog.create({
+        user: user._id,
+        action: 'failed_login',
+        description: `Failed login attempt for user: ${user.email}`,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Update last login
     user.lastLogin = new Date();
     await user.save();
+
+    // Log successful login
+    await ActivityLog.create({
+      user: user._id,
+      action: 'login',
+      description: `User ${user.email} logged in successfully`,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
 
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
@@ -143,6 +169,26 @@ router.put('/password', auth, async (req, res) => {
 
     await user.save();
     res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Logout route
+router.post('/logout', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (user) {
+      // Log logout
+      await ActivityLog.create({
+        user: user._id,
+        action: 'logout',
+        description: `User ${user.email} logged out`,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+    }
+    res.json({ message: 'Logged out successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

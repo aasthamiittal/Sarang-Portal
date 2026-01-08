@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const Manifest = require('../models/Manifest');
 const Shipment = require('../models/Shipment');
 const TrackingEvent = require('../models/TrackingEvent');
 const Billing = require('../models/Billing');
 const { processShipmentBilling } = require('../services/billingService');
+const automationEngine = require('../services/automationEngine');
 const multer = require('multer');
 
 const storage = multer.diskStorage({
@@ -49,6 +50,16 @@ router.post('/', upload.single('file'), async (req, res) => {
       shipments
     });
     await manifest.save();
+
+    // Apply automation rules for auto pickup after manifest creation
+    await automationEngine.evaluateRules('AUTO_PICKUP', {
+      userId: req.user.id,
+      data: {
+        manifestId: manifest._id,
+        shipments: shipments
+      }
+    });
+
     res.status(201).json(manifest);
   } catch (err) {
     res.status(500).json({ message: err.message });

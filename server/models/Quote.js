@@ -28,9 +28,17 @@ const quoteSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'quoted', 'accepted', 'rejected'],
-    default: 'pending'
+    enum: ['PENDING', 'RESPONDED', 'ACCEPTED', 'REJECTED', 'EXPIRED'],
+    default: 'PENDING'
   },
+  expiresAt: {
+    type: Date
+  },
+  timeline: [{
+    timestamp: { type: Date, default: Date.now },
+    status: { type: String, required: true },
+    notes: { type: String }
+  }],
   quotedPrice: {
     type: Number
   },
@@ -44,6 +52,17 @@ const quoteSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Pre-save hook to initialize timeline
+quoteSchema.pre('save', function(next) {
+  if (this.isNew) {
+    this.timeline.push({
+      status: this.status,
+      notes: 'Quote request created'
+    });
+  }
+  next();
 });
 
 module.exports = mongoose.model('Quote', quoteSchema);

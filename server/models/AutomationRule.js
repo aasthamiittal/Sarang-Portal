@@ -3,19 +3,9 @@ const mongoose = require('mongoose');
 const automationRuleSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
-  type: { type: String, enum: ['courier_selection', 'label_generation', 'manifest_grouping'], required: true },
-  conditions: {
-    weight: { min: Number, max: Number },
-    zone: { type: String },
-    service: { type: String },
-    origin: { type: String },
-    destination: { type: String }
-  },
-  actions: {
-    courierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Carrier' },
-    labelTemplate: { type: String },
-    groupBy: { type: String, enum: ['courier', 'zone', 'date'] }
-  },
+  ruleType: { type: String, enum: ['CARRIER_SELECTION', 'AUTO_PICKUP', 'AUTO_MANIFEST', 'NDR_ACTION', 'WALLET_ALERT'], required: true },
+  conditions: { type: mongoose.Schema.Types.Mixed, default: {} }, // Flexible object for conditions like weight, zone, cod, price thresholds
+  actions: { type: mongoose.Schema.Types.Mixed, default: {} }, // Flexible object defining what to do
   isActive: { type: Boolean, default: true },
   priority: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
@@ -23,6 +13,6 @@ const automationRuleSchema = new mongoose.Schema({
 });
 
 // Indexes
-automationRuleSchema.index({ user: 1, type: 1, isActive: 1 });
+automationRuleSchema.index({ user: 1, ruleType: 1, isActive: 1 });
 
 module.exports = mongoose.model('AutomationRule', automationRuleSchema);

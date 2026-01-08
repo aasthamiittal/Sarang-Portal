@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Button, TextField, Card, CardContent, Typography, Grid, MenuItem, Box } from '@mui/material';
-import { Send } from '@mui/icons-material';
+import React, { useState, useEffect } from 'react';
+import { Button, TextField, Card, CardContent, Typography, Grid, MenuItem, Box, Chip, Divider } from '@mui/material';
+import { Send, Check, Close } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import { BASE_API_URL } from '../constants';
+import Timeline from '../components/Timeline';
 
 const RequestQuote = () => {
   const { token } = useAuth();
@@ -19,8 +20,21 @@ const RequestQuote = () => {
     serviceType: '',
     specialRequirements: ''
   });
+  const [quotes, setQuotes] = useState([]);
 
   const headers = { Authorization: `Bearer ${token}` };
+
+  useEffect(() => {
+    const fetchQuotes = async () => {
+      try {
+        const response = await axios.get(`${BASE_API_URL}/quotes/my`, { headers });
+        setQuotes(response.data);
+      } catch (error) {
+        console.error('Failed to fetch quotes:', error);
+      }
+    };
+    fetchQuotes();
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,6 +52,19 @@ const RequestQuote = () => {
     } catch (error) {
       console.error('Failed to submit quote request:', error);
       alert('Failed to submit quote request. Please try again.');
+    }
+  };
+
+  const handleStatusUpdate = async (quoteId, status) => {
+    try {
+      await axios.put(`${BASE_API_URL}/quotes/${quoteId}/status`, { status }, { headers });
+      // Refresh quotes
+      const response = await axios.get(`${BASE_API_URL}/quotes/my`, { headers });
+      setQuotes(response.data);
+      alert(`Quote ${status.toLowerCase()} successfully.`);
+    } catch (error) {
+      console.error('Failed to update quote status:', error);
+      alert('Failed to update quote status. Please try again.');
     }
   };
 
@@ -250,6 +277,125 @@ const RequestQuote = () => {
           </form>
         </CardContent>
       </Card>
+
+      {/* My Quotes Section */}
+      <Typography
+        variant="h5"
+        component="h2"
+        sx={{
+          fontWeight: 'bold',
+          mt: 6,
+          mb: 4,
+          color: '#1f2937'
+        }}
+      >
+        My Quotes
+      </Typography>
+
+      {quotes.length === 0 ? (
+        <Typography variant="body1" color="text.secondary">
+          No quotes found. Submit a quote request above to get started.
+        </Typography>
+      ) : (
+        <Grid container spacing={3}>
+          {quotes.map((quote) => (
+            <Grid item xs={12} key={quote._id}>
+              <Card elevation={2} sx={{ borderRadius: 2 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      Quote #{quote._id.slice(-6)}
+                    </Typography>
+                    <Chip
+                      label={quote.status}
+                      color={
+                        quote.status === 'ACCEPTED' ? 'success' :
+                        quote.status === 'REJECTED' ? 'error' :
+                        quote.status === 'RESPONDED' ? 'warning' :
+                        'default'
+                      }
+                      size="small"
+                    />
+                  </Box>
+
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={12} md={3}>
+                      <Typography variant="body2" color="text.secondary">Origin</Typography>
+                      <Typography variant="body1">{quote.origin}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={3}>
+                      <Typography variant="body2" color="text.secondary">Destination</Typography>
+                      <Typography variant="body1">{quote.destination}</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Typography variant="body2" color="text.secondary">Weight</Typography>
+                      <Typography variant="body1">{quote.weight} kg</Typography>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
+                      <Typography variant="body2" color="text.secondary">Service</Typography>
+                      <Typography variant="body1">{quote.serviceType}</Typography>
+                    </Grid>
+                    {quote.quotedPrice && (
+                      <Grid item xs={12} md={2}>
+                        <Typography variant="body2" color="text.secondary">Quoted Price</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#059669' }}>
+                          ₹{quote.quotedPrice}
+                        </Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+
+                  {quote.adminResponse && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">Admin Response</Typography>
+                      <Typography variant="body1">{quote.adminResponse}</Typography>
+                    </Box>
+                  )}
+
+                  {quote.expiresAt && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">Expires At</Typography>
+                      <Typography variant="body1">{new Date(quote.expiresAt).toLocaleString()}</Typography>
+                    </Box>
+                  )}
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                    Timeline
+                  </Typography>
+                  <Timeline events={quote.timeline.map(t => ({
+                    timestamp: t.timestamp,
+                    title: t.status,
+                    description: t.notes
+                  }))} />
+
+                  {quote.status === 'RESPONDED' && (
+                    <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<Check />}
+                        onClick={() => handleStatusUpdate(quote._id, 'ACCEPTED')}
+                      >
+                        Accept Quote
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<Close />}
+                        onClick={() => handleStatusUpdate(quote._id, 'REJECTED')}
+                      >
+                        Reject Quote
+                      </Button>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
     </Box>
   );
 };

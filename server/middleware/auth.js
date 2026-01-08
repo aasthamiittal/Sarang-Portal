@@ -40,8 +40,10 @@ const requireAdmin = requireRole('admin');
 const requireManager = requireRole('admin', 'manager');
 const requireStaff = requireRole('admin', 'manager', 'staff');
 
-module.exports = auth;
-module.exports.requireRole = requireRole;
-module.exports.requireAdmin = requireAdmin;
-module.exports.requireManager = requireManager;
-module.exports.requireStaff = requireStaff;
+module.exports = {
+  auth,
+  requireRole,
+  requireAdmin,
+  requireManager,
+  requireStaff
+};

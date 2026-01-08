@@ -27,7 +27,9 @@ import {
   GetApp,
   Visibility,
   Tune,
-  Receipt
+  Receipt,
+  Save,
+  FolderOpen
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
@@ -114,6 +116,10 @@ const Shipments = () => {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [editingShipment, setEditingShipment] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [savedFilters, setSavedFilters] = useState([]);
+  const [filterName, setFilterName] = useState('');
+  const [saveFilterDialogOpen, setSaveFilterDialogOpen] = useState(false);
+  const [loadFilterDialogOpen, setLoadFilterDialogOpen] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -474,6 +480,61 @@ const Shipments = () => {
     setSelectedTab(0);
   };
 
+  const fetchSavedFilters = async () => {
+    try {
+      const response = await axios.get(`${BASE_API_URL}/filters`, { headers });
+      setSavedFilters(response.data);
+    } catch (error) {
+      console.error('Failed to fetch saved filters:', error);
+    }
+  };
+
+  const handleSaveFilter = async () => {
+    if (!filterName.trim()) {
+      alert('Please enter a filter name');
+      return;
+    }
+
+    try {
+      await axios.post(`${BASE_API_URL}/filters`, {
+        name: filterName,
+        filters: { ...filters, search: searchQuery }
+      }, { headers });
+      setSaveFilterDialogOpen(false);
+      setFilterName('');
+      fetchSavedFilters();
+      alert('Filter saved successfully');
+    } catch (error) {
+      alert('Failed to save filter: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleLoadFilter = async (filter) => {
+    setFilters(filter.filters);
+    setSearchQuery(filter.filters.search || '');
+    setLoadFilterDialogOpen(false);
+    // Update selected tab based on status
+    const statusIndex = statusTabs.findIndex(tab => tab.value === filter.filters.status);
+    if (statusIndex !== -1) {
+      setSelectedTab(statusIndex);
+    }
+  };
+
+  const handleDeleteFilter = async (filterId) => {
+    if (window.confirm('Are you sure you want to delete this saved filter?')) {
+      try {
+        await axios.delete(`${BASE_API_URL}/filters/${filterId}`, { headers });
+        fetchSavedFilters();
+      } catch (error) {
+        alert('Failed to delete filter: ' + (error.response?.data?.message || error.message));
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedFilters();
+  }, []);
+
   return (
     <Box sx={{ bgcolor: '#f8f9fa', minHeight: '100vh', p: 3,maxWidth:'150vh' }}>
       {/* Header */}
@@ -596,6 +657,40 @@ const Shipments = () => {
           }}
         >
           More Filters
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<Save />}
+          onClick={() => setSaveFilterDialogOpen(true)}
+          sx={{
+            textTransform: 'none',
+            borderColor: '#e5e7eb',
+            color: '#374151',
+            fontWeight: 500,
+            '&:hover': {
+              borderColor: '#d1d5db',
+              bgcolor: '#f9fafb'
+            }
+          }}
+        >
+          Save Filter
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<FolderOpen />}
+          onClick={() => setLoadFilterDialogOpen(true)}
+          sx={{
+            textTransform: 'none',
+            borderColor: '#e5e7eb',
+            color: '#374151',
+            fontWeight: 500,
+            '&:hover': {
+              borderColor: '#d1d5db',
+              bgcolor: '#f9fafb'
+            }
+          }}
+        >
+          Load Filter
         </Button>
         <Button
           variant="outlined"
@@ -935,6 +1030,61 @@ const Shipments = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailsDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Save Filter Dialog */}
+      <Dialog open={saveFilterDialogOpen} onClose={() => setSaveFilterDialogOpen(false)}>
+        <DialogTitle>Save Filter Preset</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Filter Name"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            margin="normal"
+            placeholder="Enter a name for this filter preset"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveFilterDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveFilter} variant="contained">Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Load Filter Dialog */}
+      <Dialog open={loadFilterDialogOpen} onClose={() => setLoadFilterDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Load Filter Preset</DialogTitle>
+        <DialogContent>
+          {savedFilters.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No saved filters found. Save some filters first.
+            </Typography>
+          ) : (
+            <Box sx={{ mt: 1 }}>
+              {savedFilters.map((filter) => (
+                <Box key={filter._id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p: 1, border: '1px solid #e5e7eb', borderRadius: 1 }}>
+                  <Box>
+                    <Typography variant="subtitle2">{filter.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Created: {new Date(filter.createdAt).toLocaleDateString()}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Button size="small" onClick={() => handleLoadFilter(filter)} variant="contained" sx={{ mr: 1 }}>
+                      Load
+                    </Button>
+                    <Button size="small" onClick={() => handleDeleteFilter(filter._id)} color="error">
+                      Delete
+                    </Button>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLoadFilterDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

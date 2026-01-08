@@ -6,7 +6,17 @@ import { useAuth } from '../AuthContext';
 import { BASE_API_URL } from '../constants';
 
 const BulkReport = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+
+  // Only allow admin and manager access
+  if (!user || !['admin', 'manager'].includes(user.role)) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold text-red-600">Access Denied</h1>
+        <p className="text-gray-600 mt-2">You need administrator or manager privileges to access this page.</p>
+      </div>
+    );
+  }
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reportData, setReportData] = useState([]);

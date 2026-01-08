@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const Carrier = require('../models/Carrier');
 
 router.use(auth);
@@ -24,10 +24,10 @@ router.post('/', async (req, res) => {
   try {
     const carrier = new Carrier({
       name,
-      apiKey,
       trackingUrl,
       rules
     });
+    if (apiKey) carrier.apiKey = apiKey;
     await carrier.save();
     res.status(201).json(carrier);
   } catch (err) {

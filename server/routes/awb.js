@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const AwbStock = require('../models/AwbStock');
 const Carrier = require('../models/Carrier');
 const Shipment = require('../models/Shipment');

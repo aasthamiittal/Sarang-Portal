@@ -4,6 +4,8 @@ import { Button, Chip, Dialog, DialogTitle, DialogContent, DialogActions, TextFi
 import { Edit, Delete, Block, CheckCircle } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import AdminQuotes from './AdminQuotes';
+import AutomationRules from './AutomationRules';
 
 const getRoleColor = (role) => {
   switch (role) {
@@ -64,7 +66,17 @@ const columns = [
 ];
 
 const Admin = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+
+  // Only allow admin access
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold text-red-600">Access Denied</h1>
+        <p className="text-gray-600 mt-2">You need administrator privileges to access this page.</p>
+      </div>
+    );
+  }
   const [tabValue, setTabValue] = useState(0);
   const [users, setUsers] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -154,6 +166,8 @@ const Admin = () => {
         <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
           <Tab label="User Management" />
           <Tab label="Activity Logs" />
+          <Tab label="Quote Management" />
+          <Tab label="Automation Rules" />
         </Tabs>
       </Box>
       {tabValue === 0 && (
@@ -197,6 +211,12 @@ const Admin = () => {
             />
           </div>
         </div>
+      )}
+      {tabValue === 2 && (
+        <AdminQuotes />
+      )}
+      {tabValue === 3 && (
+        <AutomationRules />
       )}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>

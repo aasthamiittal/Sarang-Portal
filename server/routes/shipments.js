@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const Shipment = require('../models/Shipment');
 const Billing = require('../models/Billing');
 const Carrier = require('../models/Carrier');
@@ -10,11 +10,15 @@ const AccountLedger = require('../models/AccountLedger');
 const TrackingEvent = require('../models/TrackingEvent');
 const Pickup = require('../models/Pickup');
 const Manifest = require('../models/Manifest');
+const NdrCase = require('../models/NdrCase');
+const ActivityLog = require('../models/ActivityLog');
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
 const { processShipmentBilling } = require('../services/billingService');
+const automationEngine = require('../services/automationEngine');
+const { sendNotification } = require('../services/notificationService');
 
 const { SHIPMENT_STATUSES, VALID_TRANSITIONS } = Shipment;
 
@@ -150,8 +154,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes, pickupAddress, billingSameAsShipping } = req.body;
   console.log('POST /shipments called with body:', req.body);
-  if (!origin || !destination || !carrier || !weight) {
-    return res.status(400).json({ message: 'Origin, destination, carrier, and weight are required' });
+  if (!origin || !destination || !weight) {
+    return res.status(400).json({ message: 'Origin, destination, and weight are required' });
   }
   try {
     const cost = parseFloat(weight) * 10;
@@ -194,6 +198,24 @@ router.post('/', async (req, res) => {
     console.log('Saving shipment');
     await shipment.save();
     console.log('Shipment saved');
+
+    // Apply automation rules for carrier selection if no carrier specified
+    if (!carrier) {
+      await automationEngine.evaluateRules('CARRIER_SELECTION', {
+        userId: req.user._id,
+        data: {
+          shipmentId: shipment._id,
+          weight: shipment.weight,
+          zone: shipment.zone,
+          origin: shipment.origin,
+          destination: shipment.destination
+        }
+      });
+      // Reload shipment to get updated carrier
+      const updatedShipment = await Shipment.findById(shipment._id);
+      shipment.carrier = updatedShipment.carrier;
+    }
+
     const billing = new Billing({
       shipment: shipment._id,
       amount: cost
@@ -283,6 +305,58 @@ router.get('/dashboard-summary', async (req, res) => {
         statusCounts[item._id] = item.count;
       });
     }
+
+    // Get NDR cases count
+    const NdrCase = require('../models/NdrCase');
+    const ndrCount = await NdrCase.countDocuments({ shipmentId: { $in: shipmentIds } });
+
+    // Get exception flags count
+    const exceptionShipments = await Shipment.find({ user: req.user._id, exceptionFlags: { $exists: true, $ne: [] } });
+    const exceptionCount = exceptionShipments.length;
+
+    // Get severity counts
+    const severityCounts = await NdrCase.aggregate([
+      { $match: { shipmentId: { $in: shipmentIds } } },
+      { $group: { _id: "$severity", count: { $sum: 1 } } }
+    ]);
+    const severity = {
+      low: 0,
+      medium: 0,
+      high: 0
+    };
+    severityCounts.forEach(item => {
+      severity[item._id] = item.count;
+    });
+
+    // Get aging categories
+    const agingCounts = await NdrCase.aggregate([
+      { $match: { shipmentId: { $in: shipmentIds } } },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $lte: ["$agingInHours", 24] }, "0-24h",
+              {
+                $cond: [
+                  { $lte: ["$agingInHours", 48] }, "24-48h",
+                  ">48h"
+                ]
+              }
+            ]
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const aging = {
+      "0-24h": 0,
+      "24-48h": 0,
+      ">48h": 0
+    };
+    agingCounts.forEach(item => {
+      aging[item._id] = item.count;
+    });
+
     const summary = {
       allOrders: shipments.length,
       draftedOrders: statusCounts['DRAFT'] || 0,
@@ -290,7 +364,13 @@ router.get('/dashboard-summary', async (req, res) => {
       packedOrders: statusCounts['PACKED'] || 0,
       dispatchedOrders: statusCounts['DISPATCHED'] || 0,
       awbStockRemaining: totalAwbStock,
-      creditBalance: creditBalance
+      creditBalance: creditBalance,
+      ndrCases: ndrCount,
+      exceptionCases: exceptionCount,
+      exceptionClassifications: {
+        severity,
+        aging
+      }
     };
 
     res.json(summary);
@@ -343,10 +423,25 @@ router.get('/ops-metrics', async (req, res) => {
       })
     );
 
+    // Calculate SLA breach metrics
+    let slaBreachedCount = 0;
+    let totalDelayHours = 0;
+    shipmentsWithStatus.forEach(s => {
+      if (s.actualDelivery && s.expectedDelivery && new Date(s.actualDelivery) > new Date(s.expectedDelivery)) {
+        slaBreachedCount++;
+        const delayMs = new Date(s.actualDelivery) - new Date(s.expectedDelivery);
+        const delayHours = delayMs / (1000 * 60 * 60);
+        totalDelayHours += delayHours;
+      }
+    });
+    const avgDelayHours = slaBreachedCount > 0 ? totalDelayHours / slaBreachedCount : 0;
+
     const metrics = {
       bookingCount: shipmentsWithStatus.length,
       deliveredCount: shipmentsWithStatus.filter(s => s.status === 'DELIVERED').length,
       pendingCount: shipmentsWithStatus.filter(s => ['DRAFT', 'BOOKED', 'PACKED'].includes(s.status)).length,
+      slaBreachedCount,
+      avgDelayHours,
       recentShipments: shipmentsWithStatus
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
@@ -359,6 +454,45 @@ router.get('/ops-metrics', async (req, res) => {
           createdAt: s.createdAt
         }))
     };
+
+    // Calculate courier performance KPIs
+    const courierPerformance = {};
+    shipmentsWithStatus.forEach(s => {
+      const carrier = s.carrier;
+      if (!courierPerformance[carrier]) {
+        courierPerformance[carrier] = {
+          totalShipments: 0,
+          deliveredCount: 0,
+          tatSum: 0,
+          tatCount: 0
+        };
+      }
+      courierPerformance[carrier].totalShipments++;
+      if (s.status === 'DELIVERED') {
+        courierPerformance[carrier].deliveredCount++;
+        if (s.actualDelivery && s.createdAt) {
+          const tatMs = new Date(s.actualDelivery) - new Date(s.createdAt);
+          const tatHours = tatMs / (1000 * 60 * 60);
+          courierPerformance[carrier].tatSum += tatHours;
+          courierPerformance[carrier].tatCount++;
+        }
+      }
+    });
+
+    const courierPerformanceArray = Object.keys(courierPerformance).map(carrier => {
+      const data = courierPerformance[carrier];
+      const deliveryRate = data.totalShipments > 0 ? (data.deliveredCount / data.totalShipments) * 100 : 0;
+      const avgTatHours = data.tatCount > 0 ? data.tatSum / data.tatCount : 0;
+      return {
+        carrier,
+        totalShipments: data.totalShipments,
+        deliveredCount: data.deliveredCount,
+        deliveryRate: Math.round(deliveryRate * 100) / 100,
+        avgTatHours: Math.round(avgTatHours * 100) / 100
+      };
+    });
+
+    metrics.courierPerformance = courierPerformanceArray;
 
     res.json(metrics);
   } catch (error) {
@@ -401,6 +535,15 @@ router.get('/export', async (req, res) => {
     ).join('\n');
 
     const csvContent = csvHeaders + csvRows;
+
+    // Log data export activity
+    await ActivityLog.create({
+      user: req.user._id,
+      action: 'data_export',
+      description: `Exported ${shipmentsWithStatus.length} shipments to CSV`,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="shipments.csv"');
@@ -547,8 +690,55 @@ router.put('/:id', async (req, res) => {
       });
       await trackingEvent.save();
 
+      // Trigger notification for shipment status change
+      if (['CREATED', 'PICKUP_SCHEDULED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'NDR'].includes(newStatus)) {
+        await sendNotification('shipment_status_change', req.user._id, {
+          userName: req.user.name,
+          shipmentId: shipment.orderId,
+          status: newStatus,
+          origin: shipment.origin,
+          destination: shipment.destination
+        });
+      }
+
       // Process billing for the event
       await processShipmentBilling(shipment._id, newStatus, req.user._id);
+
+      // Create NDR case if status changed to NDR
+      if (newStatus === 'NDR') {
+        const ndrCase = new NdrCase({
+          shipmentId: shipment._id,
+          reason: req.body.reason || 'Delivery failed'
+        });
+        await ndrCase.save();
+
+        // Apply automation rules for NDR action
+        await automationEngine.evaluateRules('NDR_ACTION', {
+          userId: req.user._id,
+          data: {
+            ndrId: ndrCase._id,
+            shipmentId: shipment._id,
+            weight: shipment.weight,
+            zone: shipment.zone,
+            origin: shipment.origin,
+            destination: shipment.destination
+          }
+        });
+      }
+
+      // Apply automation rules for auto manifest on status change to PACKED
+      if (newStatus === 'PACKED') {
+        await automationEngine.evaluateRules('AUTO_MANIFEST', {
+          userId: req.user._id,
+          data: {
+            shipmentId: shipment._id,
+            weight: shipment.weight,
+            zone: shipment.zone,
+            origin: shipment.origin,
+            destination: shipment.destination
+          }
+        });
+      }
     }
 
     shipment.updatedAt = new Date();

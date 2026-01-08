@@ -15,6 +15,9 @@ import Integrations from '../views/Integrations';
 import RequestQuote from '../views/RequestQuote';
 import Profile from '../views/Profile';
 import Admin from '../views/Admin';
+import FinanceDashboard from '../views/FinanceDashboard';
+import Notifications from '../views/Notifications';
+import NdrList from '../components/NdrList';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -46,6 +49,9 @@ const Layout = () => {
             <Route path="/request-quote" element={<RequestQuote />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/finance" element={<FinanceDashboard />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/ndr" element={<NdrList />} />
             <Route path="/" element={<Navigate to="/dashboard" />} />
           </Routes>
         </main>
