@@ -37,6 +37,42 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
     orderNotes: '',
   });
 
+  const isLabelGenerated = !!initialData.labelGeneratedAt;
+  const isManifestSubmitted = !!initialData.manifestSubmittedAt;
+
+  const isFieldDisabled = (fieldName) => {
+    if (isManifestSubmitted) {
+      return true; // All fields are immutable after manifest submission
+    }
+    if (isLabelGenerated && [
+      'origin',
+      'destination',
+      'weight',
+      'carrier',
+      'customerInfo.firstName',
+      'customerInfo.lastName',
+      'customerInfo.mobile',
+      'customerInfo.alternateMobile',
+      'customerInfo.email',
+      'customerInfo.country',
+      'customerInfo.address1',
+      'customerInfo.address2',
+      'customerInfo.landmark',
+      'customerInfo.pincode',
+      'customerInfo.city',
+      'customerInfo.state',
+      'productInfo.description',
+      'productInfo.quantity',
+      'productInfo.value',
+      'pickupAddress.name',
+      'pickupAddress.address',
+      'pickupAddress.phone'
+    ].includes(fieldName)) {
+      return true; // Specific fields are immutable after label generation
+    }
+    return false;
+  };
+
   useEffect(() => {
     setFormData(prev => ({
       ...prev,
@@ -83,6 +119,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('origin')}
           />
           <TextField
             label="Destination"
@@ -92,6 +129,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('destination')}
           />
           <TextField
             label="Carrier"
@@ -101,6 +139,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('carrier')}
           />
           <TextField
             label="Weight"
@@ -110,6 +149,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('weight')}
           />
 
           <Typography variant="h6" style={{ marginTop: 20 }}>Pickup Address</Typography>
@@ -120,6 +160,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('pickupAddress.name')}
           />
           <TextField
             label="Pickup Address"
@@ -128,6 +169,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('pickupAddress.address')}
           />
           <TextField
             label="Pickup Phone"
@@ -136,6 +178,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('pickupAddress.phone')}
           />
 
           <Typography variant="h6" style={{ marginTop: 20 }}>Customer Information</Typography>
@@ -147,6 +190,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.firstName')}
           />
           <TextField
             label="Last Name"
@@ -156,6 +200,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.lastName')}
           />
           <TextField
             label="Mobile Number"
@@ -165,6 +210,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.mobile')}
           />
           <TextField
             label="Alternate Mobile"
@@ -173,6 +219,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('customerInfo.alternateMobile')}
           />
           <TextField
             label="Email Address"
@@ -183,6 +230,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             margin="normal"
             required
             type="email"
+            disabled={isFieldDisabled('customerInfo.email')}
           />
           <TextField
             label="Country"
@@ -192,6 +240,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.country')}
           />
           <TextField
             label="Address 1"
@@ -201,6 +250,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.address1')}
           />
           <TextField
             label="Address 2"
@@ -210,6 +260,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.address2')}
           />
           <TextField
             label="Landmark"
@@ -218,6 +269,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('customerInfo.landmark')}
           />
           <TextField
             label="Pincode"
@@ -227,6 +279,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.pincode')}
           />
           <TextField
             label="City"
@@ -236,6 +289,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.city')}
           />
           <TextField
             label="State"
@@ -245,6 +299,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             required
+            disabled={isFieldDisabled('customerInfo.state')}
           />
 
           <Typography variant="h6" style={{ marginTop: 20 }}>Billing Information</Typography>
@@ -254,6 +309,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
                 checked={formData.billingSameAsShipping}
                 onChange={(e) => setFormData({ ...formData, billingSameAsShipping: e.target.checked })}
                 name="billingSameAsShipping"
+                disabled={isFieldDisabled('billingSameAsShipping')}
               />
             }
             label="Billing address is same as shipping address"
@@ -267,6 +323,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             onChange={handleChange}
             fullWidth
             margin="normal"
+            disabled={isFieldDisabled('productInfo.description')}
           />
           <TextField
             label="Quantity"
@@ -276,6 +333,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             type="number"
+            disabled={isFieldDisabled('productInfo.quantity')}
           />
           <TextField
             label="Value"
@@ -285,6 +343,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             fullWidth
             margin="normal"
             type="number"
+            disabled={isFieldDisabled('productInfo.value')}
           />
           <TextField
             label="Order Notes"
@@ -295,6 +354,7 @@ const ShipmentForm = ({ open, onClose, onSubmit, initialData = {} }) => {
             margin="normal"
             multiline
             rows={3}
+            disabled={isFieldDisabled('orderNotes')}
           />
         </DialogContent>
         <DialogActions>

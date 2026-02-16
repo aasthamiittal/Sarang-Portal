@@ -312,6 +312,10 @@ const Shipments = () => {
   };
 
   const handleAdd = () => {
+    if (user?.kycStatus !== 'approved') {
+      alert('KYC verification required before creating shipments. Please complete your KYC process.');
+      return;
+    }
     setEditingShipment(null);
     setDialogOpen(true);
   };
@@ -412,8 +416,11 @@ const Shipments = () => {
   };
 
   const handleSubmit = async (formData) => {
+    console.log('DEBUG: handleSubmit called with formData:', formData);
+    console.log('DEBUG: editingShipment:', editingShipment);
     try {
       if (editingShipment) {
+        console.log('DEBUG: Making PUT request to update shipment:', editingShipment._id);
         await axios.put(`${BASE_API_URL}/shipments/${editingShipment._id}`, formData, { headers });
       } else {
         await axios.post(`${BASE_API_URL}/shipments`, formData, { headers });
@@ -422,6 +429,8 @@ const Shipments = () => {
       setDialogOpen(false);
     } catch (error) {
       console.error('Failed to save shipment:', error);
+      console.log('DEBUG: Error response:', error.response?.data);
+      alert('Failed to save shipment: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -538,7 +547,7 @@ const Shipments = () => {
   return (
     <Box sx={{ bgcolor: '#f8f9fa', minHeight: '100vh', p: 3,maxWidth:'150vh' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, gap: 2 }}>
         <Box>
           <Typography variant="h4" fontWeight={600} color="text.primary">
             All Orders
@@ -715,7 +724,7 @@ const Shipments = () => {
       <Box sx={{ 
         bgcolor: 'white', 
         borderRadius: 1,
-        overflow: 'hidden',
+        overflowX: 'auto',
         boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
         width: '100%'
       }}>
@@ -758,8 +767,13 @@ const Shipments = () => {
             '& .MuiDataGrid-footerContainer': {
               borderTop: '1px solid #e5e7eb'
             },
-            '& .MuiDataGrid-virtualScroller': {
-              overflowX: 'hidden'
+            // Allow horizontal scrolling for the data grid content
+            '& .MuiDataGrid-virtualScrollerContent': {
+              width: 'max-content',
+              minWidth: '100%'
+            },
+            '& .MuiDataGrid-main': {
+              overflow: 'unset'
             }
           }}
         />
@@ -774,7 +788,7 @@ const Shipments = () => {
       >
         <DialogTitle>Advanced Filters</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mt: 1 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
             <TextField
               select
               label="Status"

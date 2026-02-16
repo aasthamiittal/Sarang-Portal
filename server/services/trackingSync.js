@@ -1,9 +1,9 @@
 const Shipment = require('../models/Shipment');
 const TrackingEvent = require('../models/TrackingEvent');
-const Carrier = require('../models/Carrier');
 const TrackingSyncLog = require('../models/TrackingSyncLog');
 const { getCarrierService } = require('./carriers');
 const { mapCarrierStatus } = require('./statusMapper');
+const { getCarrierForShipment } = require('./carrierResolver');
 const RetryMechanism = require('./retryMechanism');
 
 class TrackingSyncService {
@@ -33,12 +33,15 @@ class TrackingSyncService {
       // Find shipments that are not delivered and have AWB
       const shipments = await Shipment.find({
         awbNumber: { $exists: true, $ne: null },
-        statusHistory: {
-          $not: {
-            $elemMatch: { status: 'DELIVERED' }
+        $and: [
+          { $or: [{ status: { $ne: 'DELIVERED' } }, { status: { $exists: false } }] },
+          {
+            statusHistory: {
+              $not: { $elemMatch: { status: 'DELIVERED' } }
+            }
           }
-        }
-      }).populate('carrier');
+        ]
+      }).populate('carrierId');
 
       for (const shipment of shipments) {
         await this.syncShipmentTracking(shipment);
@@ -50,7 +53,7 @@ class TrackingSyncService {
 
   async syncShipmentTracking(shipment) {
     try {
-      const carrier = await Carrier.findById(shipment.carrier);
+      const carrier = await getCarrierForShipment(shipment);
       if (!carrier || !carrier.apiKey) {
         await TrackingSyncLog.create({
           user: shipment.user,
@@ -88,8 +91,9 @@ class TrackingSyncService {
             await newEvent.save();
 
             // Update shipment status if it's a new status
-            const currentStatus = await shipment.getCurrentStatus();
+            const currentStatus = shipment.status || await shipment.getCurrentStatus();
             if (internalStatus !== currentStatus) {
+              shipment.status = internalStatus;
               shipment.statusHistory.push({
                 status: internalStatus,
                 note: `Auto-sync from ${carrier.name}`,

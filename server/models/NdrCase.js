@@ -19,12 +19,11 @@ const ndrCaseSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Pre-save hook to calculate aging
-ndrCaseSchema.pre('save', function(next) {
+// Pre-save hook to calculate aging. Mongoose 9 does not pass next.
+ndrCaseSchema.pre('save', function() {
   if (this.isNew || this.isModified()) {
     this.agingInHours = Math.floor((Date.now() - this.createdAt) / (1000 * 60 * 60));
   }
-  next();
 });
 
 module.exports = mongoose.model('NdrCase', ndrCaseSchema);

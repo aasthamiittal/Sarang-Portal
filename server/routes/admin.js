@@ -32,12 +32,10 @@ router.post('/users', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({
       name,
       email,
-      password: hashedPassword,
+      password,
       role: role || 'user'
     });
     await user.save();

@@ -93,10 +93,11 @@ class AutomationEngine {
   // CARRIER_SELECTION: Select carrier for shipment
   async selectCarrier(shipmentId, carrierId) {
     const shipment = await Shipment.findById(shipmentId);
-    if (!shipment || shipment.carrier) return; // Manual override if already set
+    if (!shipment || (shipment.carrier && shipment.carrierId)) return; // Manual override if already set
 
     const carrier = await Carrier.findById(carrierId);
     if (carrier) {
+      shipment.carrierId = carrier._id;
       shipment.carrier = carrier.name;
       await shipment.save();
     }

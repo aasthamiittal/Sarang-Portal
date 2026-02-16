@@ -28,7 +28,7 @@ class PDFService {
     doc.fontSize(14).text(`Order ID: ${shipment.orderId}`);
     doc.text(`Tracking Number: ${shipment.trackingNumber}`);
     doc.text(`AWB Number: ${shipment.awbNumber || 'N/A'}`);
-    doc.text(`Carrier: ${shipment.carrier}`);
+    doc.text(`Carrier: ${(shipment.carrierId && shipment.carrierId.name) || shipment.carrier}`);
     doc.moveDown();
 
     // Addresses
@@ -176,7 +176,7 @@ class PDFService {
     shipments.forEach(shipment => {
       doc.text(shipment.orderId, 50, y);
       doc.text(shipment.trackingNumber, 150, y);
-      doc.text(shipment.carrier, 300, y);
+      doc.text((shipment.carrierId && shipment.carrierId.name) || shipment.carrier, 300, y);
       doc.text(shipment.origin, 400, y);
       doc.text(shipment.destination, 500, y);
       doc.text(`${shipment.weight}kg`, 600, y);
@@ -234,7 +234,7 @@ class PDFService {
     doc.text('Shipment Details:');
     doc.fontSize(12).text(`Order ID: ${shipment.orderId}`);
     doc.text(`Tracking Number: ${shipment.trackingNumber}`);
-    doc.text(`Carrier: ${shipment.carrier}`);
+    doc.text(`Carrier: ${(shipment.carrierId && shipment.carrierId.name) || shipment.carrier}`);
     doc.text(`Weight: ${shipment.weight} kg`);
     doc.moveDown();
 

@@ -54,15 +54,14 @@ const quoteSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Pre-save hook to initialize timeline
-quoteSchema.pre('save', function(next) {
+// Pre-save hook to initialize timeline. Mongoose 9 does not pass next.
+quoteSchema.pre('save', function() {
   if (this.isNew) {
     this.timeline.push({
       status: this.status,
       notes: 'Quote request created'
     });
   }
-  next();
 });
 
 module.exports = mongoose.model('Quote', quoteSchema);

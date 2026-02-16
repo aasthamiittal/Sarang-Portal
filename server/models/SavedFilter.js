@@ -26,15 +26,14 @@ const savedFilterSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Ensure only one default filter per user
-savedFilterSchema.pre('save', async function(next) {
+// Ensure only one default filter per user. Mongoose 9 does not pass next.
+savedFilterSchema.pre('save', async function() {
   if (this.isDefault) {
     await this.constructor.updateMany(
       { userId: this.userId, _id: { $ne: this._id } },
       { isDefault: false }
     );
   }
-  next();
 });
 
 module.exports = mongoose.model('SavedFilter', savedFilterSchema);

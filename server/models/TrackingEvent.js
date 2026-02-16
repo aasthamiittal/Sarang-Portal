@@ -27,7 +27,8 @@ const trackingEventSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   location: { type: String },
   source: { type: String, enum: ['courier', 'manual', 'system'], default: 'manual' },
-  description: { type: String }
+  description: { type: String },
+  isPublic: { type: Boolean, default: false } // New field to control public visibility
 });
 
 module.exports = mongoose.model('TrackingEvent', trackingEventSchema);

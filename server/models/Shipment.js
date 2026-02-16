@@ -48,6 +48,7 @@ const IMMUTABLE_FIELDS_AFTER_LABEL = [
   'destination',
   'weight',
   'carrier',
+  'carrierId',
   'customerInfo',
   'productInfo',
   'pickupAddress'
@@ -61,6 +62,7 @@ const IMMUTABLE_FIELDS_AFTER_MANIFEST = [
   'origin',
   'destination',
   'carrier',
+  'carrierId',
   'weight',
   'cost',
   'pickupDate',
@@ -88,7 +90,10 @@ const shipmentSchema = new mongoose.Schema({
    awbNumber: { type: String },
    origin: { type: String, required: true },
    destination: { type: String, required: true },
-   carrier: { type: String, required: true },
+   carrier: { type: String }, // legacy: keep for backward compat; prefer carrierId
+   carrierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Carrier' },
+   status: { type: String, enum: SHIPMENT_STATUSES }, // stored current status; fallback from statusHistory/TrackingEvent
+   subStatus: { type: String },
    weight: { type: Number, required: true },
    cost: { type: Number },
    carrierCost: { type: Number },
@@ -140,7 +145,26 @@ const shipmentSchema = new mongoose.Schema({
     note: { type: String }
   }],
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  secureToken: { type: String, unique: true, sparse: true } // New field for public tracking
+});
+
+// Indexes for carrierId (prefer for queries) and status
+shipmentSchema.index({ carrierId: 1 });
+shipmentSchema.index({ status: 1 });
+
+// Pre-validate: require either carrierId or carrier (legacy). Mongoose 9 does not pass next.
+shipmentSchema.pre('validate', function() {
+  if (this.isNew && !this.carrierId && !this.carrier) {
+    throw new Error('Either carrierId or carrier (name) is required');
+  }
+});
+
+// Pre-save hook to generate secureToken if not provided
+shipmentSchema.pre('save', function() {
+  if (this.isNew && !this.secureToken) {
+    this.secureToken = require('crypto').randomBytes(16).toString('hex');
+  }
 });
 
 // Virtual for margin calculation
@@ -160,30 +184,23 @@ shipmentSchema.methods.isSLACompliant = function() {
   return null; // Not yet determined
 };
 
-// Pre-save hook to enforce immutability after label generation and manifest submission
-shipmentSchema.pre('save', function(next) {
-  if (typeof next !== 'function') {
-    // If next is not a function, skip the hook to prevent errors
-    return;
-  }
-  // Check immutability after label generation
+// Pre-save hook to enforce immutability after label generation and manifest submission. Mongoose 9 does not pass next.
+shipmentSchema.pre('save', function() {
   if (this.labelGeneratedAt && this.isModified()) {
     const modifiedFields = this.modifiedPaths();
     const immutableModified = modifiedFields.filter(field => IMMUTABLE_FIELDS_AFTER_LABEL.includes(field));
     if (immutableModified.length > 0) {
-      return next(new Error(`Cannot modify immutable fields after label generation: ${immutableModified.join(', ')}`));
+      throw new Error(`Cannot modify immutable fields after label generation: ${immutableModified.join(', ')}`);
     }
   }
 
-  // Check immutability after manifest submission
   if (this.manifestSubmittedAt && this.isModified()) {
     const modifiedFields = this.modifiedPaths();
     const immutableModified = modifiedFields.filter(field => IMMUTABLE_FIELDS_AFTER_MANIFEST.includes(field));
     if (immutableModified.length > 0) {
-      return next(new Error(`Cannot modify immutable fields after manifest submission: ${immutableModified.join(', ')}`));
+      throw new Error(`Cannot modify immutable fields after manifest submission: ${immutableModified.join(', ')}`);
     }
   }
-  next();
 });
 
 // Method to get current status from latest tracking event

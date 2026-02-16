@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
@@ -10,6 +11,14 @@ app.use(cors());
 
 // Parse JSON bodies
 app.use(express.json());
+
+// Rate limiting for public tracking API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Max 100 requests per 15 minutes per IP
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+app.use("/api/public/track", apiLimiter);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -53,10 +62,12 @@ const ndrRoutes = require('./routes/ndr');
 const financeRoutes = require('./routes/finance');
 const notificationsRoutes = require('./routes/notifications');
 const trackingRoutes = require('./routes/tracking');
+const publicTrackingRoutes = require('./routes/publicTracking'); // New route for public tracking
 const trackingSyncService = require('./services/trackingSync');
 const scheduledReports = require('./services/scheduledReports');
 
 app.use('/api/shipments', shipmentRoutes);
+app.use('/api/public', publicTrackingRoutes); // Public tracking route
 app.use('/api/manifests', manifestRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportRoutes);

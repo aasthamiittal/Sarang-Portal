@@ -22,7 +22,7 @@ const Login = () => {
   };
 
   return (
-    <div className="flex max-h-[100vh]">
+    <div className="flex min-h-screen">
       {/* Left Side - 3D Illustration */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-gray-50 to-gray-100 items-center justify-center p-12">
         <div className="w-full h-full flex items-center justify-center ">

@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const AwbStock = require('../models/AwbStock');
 const Carrier = require('../models/Carrier');
 const Shipment = require('../models/Shipment');
+const { getCarrierForShipment } = require('../services/carrierResolver');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
@@ -113,8 +114,7 @@ router.post('/assign/:shipmentId', async (req, res) => {
       return res.status(400).json({ message: 'AWB already assigned to this shipment' });
     }
 
-    // Find carrier
-    const carrier = await Carrier.findOne({ name: shipment.carrier });
+    const carrier = await getCarrierForShipment(shipment);
     if (!carrier) {
       return res.status(404).json({ message: 'Carrier not found' });
     }

@@ -26,15 +26,19 @@ const Layout = () => {
     <div className="flex min-h-screen bg-gray-100">
       <Sidebar isOpen={sidebarOpen} setOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col">
-        <header className="lg:hidden bg-white p-4 shadow flex items-center">
+        {/* Mobile header with hamburger menu */}
+        <header className="lg:hidden bg-white p-4 shadow-md flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="text-gray-600 text-2xl"
           >
             ☰
           </button>
+          <h1 className="text-xl font-semibold">Dashboard</h1> {/* You might want to make this dynamic */}
         </header>
-        <main className="flex-1 p-6 lg:ml-64">
+
+        {/* Main content area, adjusts margin based on sidebar visibility */}
+        <main className="flex-1 p-6 transition-all duration-300 ease-in-out lg:ml-64">
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/shipments" element={<Shipments />} />

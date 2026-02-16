@@ -153,13 +153,13 @@ router.get('/shipments/export', async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    const shipments = await Shipment.find(query).sort({ createdAt: -1 });
+    const shipments = await Shipment.find(query).populate('carrierId', 'name').sort({ createdAt: -1 });
 
     if (format === 'csv') {
-      // CSV export
+      const { getCarrierNameForShipment } = require('../services/carrierResolver');
       const csvHeaders = 'Order ID,Tracking Number,Status,Carrier,Weight,Cost,Pickup Date,Dispatch Date,Delivery Date\n';
       const csvRows = shipments.map(shipment =>
-        `${shipment.orderId || ''},${shipment.trackingNumber},${shipment.status},${shipment.carrier},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
+        `${shipment.orderId || ''},${shipment.trackingNumber},${shipment.status || ''},${getCarrierNameForShipment(shipment) || shipment.carrier || ''},${shipment.weight},${shipment.cost},${shipment.pickupDate ? shipment.pickupDate.toISOString().split('T')[0] : ''},${shipment.dispatchDate ? shipment.dispatchDate.toISOString().split('T')[0] : ''},${shipment.deliveryDate ? shipment.deliveryDate.toISOString().split('T')[0] : ''}`
       ).join('\n');
 
       const csvContent = csvHeaders + csvRows;
@@ -236,7 +236,10 @@ router.get('/shipment-status', async (req, res) => {
       if (endDate) match.createdAt.$lte = new Date(endDate);
     }
 
-    if (carrier) match.carrier = carrier;
+    if (carrier) {
+      if (/^[0-9a-fA-F]{24}$/.test(carrier)) match.carrierId = require('mongoose').Types.ObjectId(carrier);
+      else match.carrier = new RegExp(carrier, 'i');
+    }
     if (status) match.status = status;
 
     const report = await Shipment.aggregate([

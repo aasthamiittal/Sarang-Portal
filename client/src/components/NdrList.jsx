@@ -59,14 +59,14 @@ const NdrList = () => {
         <div className="space-y-4">
           {ndrCases.map((ndrCase) => (
             <div key={ndrCase._id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div>
+              <div className="flex flex-col sm:flex-row justify-between items-start mb-3">
+                <div className="mb-2 sm:mb-0">
                   <h3 className="font-medium">Order: {ndrCase.shipmentId?.orderId}</h3>
                   <p className="text-sm text-gray-600">Reason: {ndrCase.reason}</p>
                   <p className="text-sm text-gray-600">Attempts: {ndrCase.attempts}</p>
                   <p className="text-sm text-gray-600">Current Action: {ndrCase.currentAction}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setSelectedCase(ndrCase._id)}
                     className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
@@ -85,7 +85,7 @@ const NdrList = () => {
                     className="w-full p-2 border rounded mb-3"
                     rows={3}
                   />
-                  <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => performAction(ndrCase._id, 'REATTEMPT')}
                       className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"

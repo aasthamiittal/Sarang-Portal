@@ -24,6 +24,21 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 const Dashboard = () => {
   const { token } = useAuth();
   const navigate = useNavigate();
+
+  const getStatusColorClass = (status) => {
+    switch (status) {
+      case 'DELIVERED': return 'bg-green-100 text-green-800';
+      case 'OUT_FOR_DELIVERY': return 'bg-blue-100 text-blue-800';
+      case 'IN_TRANSIT': return 'bg-indigo-100 text-indigo-800';
+      case 'CANCELLED':
+      case 'LOST':
+      case 'DAMAGED': return 'bg-red-100 text-red-800';
+      case 'NDR':
+      case 'RTO_INITIATED': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const [orderSummary, setOrderSummary] = useState({
     allOrders: 0,
     draftedOrders: 0,
@@ -216,11 +231,11 @@ const Dashboard = () => {
     <div className="bg-gray-50 min-h-screen p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
 
           {/* Tracking Health Indicator and Notifications Bell */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             {/* Tracking Sync Status */}
             <div className="flex items-center gap-2">
               <div
@@ -328,7 +343,7 @@ const Dashboard = () => {
         )}
 
         {/* Three Column Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Actions Section */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4 text-gray-900">Actions</h2>
@@ -337,7 +352,7 @@ const Dashboard = () => {
             ) : errors.actionsSummary ? (
               <div className="text-center py-8 text-red-600">Error loading actions</div>
             ) : (
-              <div>
+              <div className="space-y-3">
                 <ActionCard
                   title="Pickups in Progress"
                   value={actionsSummary.pickupsInProgress}
@@ -410,7 +425,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Recent Shipments */}
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-semibold mb-4 text-gray-900">Recent Shipments</h2>
             {isLoading ? (
@@ -418,24 +432,33 @@ const Dashboard = () => {
             ) : errors.opsMetrics ? (
               <div className="text-center py-8 text-red-600">Error loading shipments</div>
             ) : (
-              <div className="space-y-2">
+              <div className="overflow-x-auto">
                 {opsMetrics.recentShipments?.length > 0 ? (
-                  opsMetrics.recentShipments.map((shipment) => (
-                    <div key={shipment.id} className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">{shipment.orderId}</p>
-                        <p className="text-xs text-gray-400">{shipment.carrier} • {shipment.status}</p>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {new Date(shipment.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  ))
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Carrier</th>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {opsMetrics.recentShipments.map((shipment) => (
+                        <tr key={shipment.id}>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{shipment.orderId}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${getStatusColorClass(shipment.status)}`}>{shipment.status}</span></td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{shipment.carrier}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{new Date(shipment.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
                     <Box className="w-20 h-20 text-gray-300 mb-4" strokeWidth={1} />
-                    <p className="text-base font-semibold text-gray-900 mb-1">Recent Shipments</p>
-                    <p className="text-sm text-gray-500">No recent shipments</p>
+                    <p className="text-base font-semibold text-gray-900 mb-1">No Recent Shipments</p>
+                    <p className="text-sm text-gray-500">Shipments will appear here after booking.</p>
                   </div>
                 )}
               </div>

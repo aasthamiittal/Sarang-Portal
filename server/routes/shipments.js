@@ -19,6 +19,8 @@ const fs = require('fs');
 const { processShipmentBilling } = require('../services/billingService');
 const automationEngine = require('../services/automationEngine');
 const { sendNotification } = require('../services/notificationService');
+const { getCarrierForShipment, getCarrierNameForShipment } = require('../services/carrierResolver');
+const shipmentStatusService = require('../services/shipmentStatusService');
 
 const { SHIPMENT_STATUSES, VALID_TRANSITIONS } = Shipment;
 
@@ -101,8 +103,12 @@ router.get('/', async (req, res) => {
     const { status, carrier, origin, destination, startDate, endDate, search, paymentStatus, page = 1, limit = 10 } = req.query;
     const query = { user: req.user._id };
 
-    if (status) query.status = status;
-    if (carrier) query.carrier = new RegExp(carrier, 'i');
+    if (status) query.$or = [{ status }, { 'statusHistory.status': status }];
+    if (carrier) {
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(carrier);
+      if (isObjectId) query.carrierId = carrier;
+      else query.carrier = new RegExp(carrier, 'i');
+    }
     if (origin) query.origin = new RegExp(origin, 'i');
     if (destination) query.destination = new RegExp(destination, 'i');
     if (paymentStatus) query.paymentStatus = paymentStatus;
@@ -112,7 +118,7 @@ router.get('/', async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
     if (search) {
-      query.$or = [
+      const searchClauses = [
         { trackingNumber: new RegExp(search, 'i') },
         { awbNumber: new RegExp(search, 'i') },
         { orderId: new RegExp(search, 'i') },
@@ -120,19 +126,26 @@ router.get('/', async (req, res) => {
         { destination: new RegExp(search, 'i') },
         { carrier: new RegExp(search, 'i') }
       ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchClauses }];
+        delete query.$or;
+      } else {
+        query.$or = searchClauses;
+      }
     }
 
     const shipments = await Shipment.find(query)
+      .populate('carrierId', 'name')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    // Populate current status from latest tracking event
+    // Resolve status (stored or from history/TrackingEvent) and carrier name for response
     const shipmentsWithStatus = await Promise.all(
       shipments.map(async (shipment) => {
         const shipmentObj = shipment.toObject();
-        const currentStatus = await shipment.getCurrentStatus();
-        shipmentObj.status = currentStatus;
+        shipmentObj.status = shipment.status || await shipment.getCurrentStatus();
+        shipmentObj.carrier = getCarrierNameForShipment(shipment) || shipmentObj.carrier;
         return shipmentObj;
       })
     );
@@ -152,10 +165,13 @@ router.get('/', async (req, res) => {
 
 // POST / - Create a new shipment
 router.post('/', async (req, res) => {
-  const { origin, destination, carrier, weight, status, customerInfo, productInfo, orderNotes, pickupAddress, billingSameAsShipping } = req.body;
+  const { origin, destination, carrier, carrierId, weight, status, customerInfo, productInfo, orderNotes, pickupAddress, billingSameAsShipping } = req.body;
   console.log('POST /shipments called with body:', req.body);
   if (!origin || !destination || !weight) {
     return res.status(400).json({ message: 'Origin, destination, and weight are required' });
+  }
+  if (!carrier && !carrierId) {
+    return res.status(400).json({ message: 'Either carrier (name) or carrierId is required' });
   }
 
   // Check KYC status
@@ -164,6 +180,22 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    let resolvedCarrierId = carrierId || null;
+    let resolvedCarrierName = carrier || null;
+    if (carrierId) {
+      const c = await Carrier.findById(carrierId);
+      if (c) {
+        resolvedCarrierId = c._id;
+        resolvedCarrierName = c.name;
+      }
+    } else if (carrier) {
+      const c = await Carrier.findOne({ name: new RegExp(`^${String(carrier).trim()}$`, 'i') });
+      if (c) {
+        resolvedCarrierId = c._id;
+        resolvedCarrierName = c.name;
+      }
+    }
+
     const cost = parseFloat(weight) * 10;
     const trackingNumber = randomUUID();
     const orderId = 'ORD-' + Date.now();
@@ -179,7 +211,9 @@ router.post('/', async (req, res) => {
       trackingNumber,
       origin,
       destination,
-      carrier,
+      carrier: resolvedCarrierName,
+      carrierId: resolvedCarrierId,
+      status: initialStatus,
       weight,
       cost,
       customerInfo,
@@ -196,7 +230,8 @@ router.post('/', async (req, res) => {
       shipment: shipment._id,
       eventCode: initialStatus,
       description: 'Order created',
-      source: 'system'
+      source: 'system',
+      isPublic: true // Make initial tracking event public
     });
     console.log('Saving tracking event');
     await initialTrackingEvent.save();
@@ -206,7 +241,7 @@ router.post('/', async (req, res) => {
     console.log('Shipment saved');
 
     // Apply automation rules for carrier selection if no carrier specified
-    if (!carrier) {
+    if (!resolvedCarrierId && !resolvedCarrierName) {
       await automationEngine.evaluateRules('CARRIER_SELECTION', {
         userId: req.user._id,
         data: {
@@ -217,9 +252,9 @@ router.post('/', async (req, res) => {
           destination: shipment.destination
         }
       });
-      // Reload shipment to get updated carrier
-      const updatedShipment = await Shipment.findById(shipment._id);
-      shipment.carrier = updatedShipment.carrier;
+      const updatedShipment = await Shipment.findById(shipment._id).populate('carrierId', 'name');
+      shipment.carrier = updatedShipment.carrier || (updatedShipment.carrierId && updatedShipment.carrierId.name);
+      shipment.carrierId = updatedShipment.carrierId;
     }
 
     const billing = new Billing({
@@ -229,7 +264,9 @@ router.post('/', async (req, res) => {
     console.log('Saving billing');
     await billing.save();
     console.log('Billing saved');
-    res.status(201).json(shipment);
+    const out = shipment.toObject();
+    out.carrier = getCarrierNameForShipment(shipment) || out.carrier;
+    res.status(201).json(out);
   } catch (err) {
     console.error('Error in POST /shipments:', err);
     if (err.code === 11000) {
@@ -635,11 +672,14 @@ router.get('/:id/events', async (req, res) => {
 // GET /:id - Retrieve a specific shipment by ID
 router.get('/:id', async (req, res) => {
   try {
-    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id }).populate('carrierId', 'name');
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
     }
-    res.json(shipment);
+    const out = shipment.toObject();
+    out.carrier = getCarrierNameForShipment(shipment) || out.carrier;
+    out.status = shipment.status || await shipment.getCurrentStatus();
+    res.json(out);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -648,20 +688,24 @@ router.get('/:id', async (req, res) => {
 // PUT /:id - Update a shipment by ID
 router.put('/:id', async (req, res) => {
   try {
+    console.log('DEBUG: PUT /shipments/:id called. id:', req.params.id, 'user:', req.user._id, 'body:', req.body);
     const shipment = await Shipment.findOne({ _id: req.params.id, user: req.user._id });
+    console.log('DEBUG: Shipment found:', shipment ? shipment._id : 'null');
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });
     }
 
     // Check if shipment is locked (manifest submitted)
     if (shipment.manifestSubmittedAt) {
+      console.log('DEBUG: Shipment locked due to manifest submitted');
       return res.status(400).json({
         message: 'Cannot edit shipment after manifest submission',
         lockReason: 'Manifest already submitted'
       });
     }
+    console.log('DEBUG: Shipment not locked');
 
-    const oldStatus = await shipment.getCurrentStatus();
+    const oldStatus = shipment.status || await shipment.getCurrentStatus();
     const newStatus = req.body.status;
 
     // Validate status transition
@@ -682,10 +726,13 @@ router.put('/:id', async (req, res) => {
 
     // Handle label generation and AWB consumption
     if (newStatus === 'LABEL_GENERATED' && oldStatus !== 'LABEL_GENERATED') {
-      // Find available AWB for the carrier
-      const carrier = await Carrier.findOne({ name: shipment.carrier });
+      const carrier = await getCarrierForShipment(shipment);
       if (!carrier) {
         return res.status(400).json({ message: 'Carrier not found' });
+      }
+      if (!shipment.carrierId) {
+        shipment.carrierId = carrier._id;
+        shipment.carrier = carrier.name;
       }
 
       const availableAwb = await AwbStock.findOne({ courierId: carrier._id, status: 'available' });
@@ -704,8 +751,11 @@ router.put('/:id', async (req, res) => {
     }
 
     if (newStatus && newStatus !== oldStatus) {
+      shipment.status = newStatus;
+      if (req.body.subStatus !== undefined) shipment.subStatus = req.body.subStatus;
       shipment.statusHistory.push({
         status: newStatus,
+        timestamp: new Date(),
         note: req.body.note || `Status changed from ${oldStatus} to ${newStatus}`
       });
 
@@ -714,7 +764,8 @@ router.put('/:id', async (req, res) => {
         shipment: shipment._id,
         eventCode: newStatus,
         description: req.body.note || `Status changed to ${newStatus}`,
-        source: 'manual'
+        source: 'manual',
+        isPublic: true // Make status update events public
       });
       await trackingEvent.save();
 
