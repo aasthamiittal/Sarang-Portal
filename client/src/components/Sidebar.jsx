@@ -60,8 +60,8 @@ const Sidebar = ({ isOpen, setOpen }) => {
         onClick={() => setOpen(false)}
       ></div>
       <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-800 text-white p-4 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 lg:transform-none lg:translate-x-0 flex flex-col h-full`}>
-          <div className="text-2xl font-bold mb-8 text-center">SARANG</div>
-      {/* /  <img src={SarangLogo} alt="Sarang Logo" className="h-16 w-16 mx-auto mb-8" /> */}
+          {/* <div className="text-2xl font-bold mb-8 text-center">SARANG</div> */}
+       <img src={SarangLogo} alt="Sarang Logo" className="h-16 w-28 mx-auto mb-3" />
         <nav className="space-y-2 flex-1 overflow-y-auto scrollbar-hide">
           {getMenuItems().map((item) => (
             <Link

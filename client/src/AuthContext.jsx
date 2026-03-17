@@ -7,9 +7,17 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+const getStoredToken = () => {
+  try {
+    return localStorage.getItem('token');
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(null);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [token, setToken] = useState(getStoredToken);
+  const [authenticated, setAuthenticated] = useState(() => !!getStoredToken());
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
@@ -40,7 +48,7 @@ export const AuthProvider = ({ children }) => {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid
+          
           logout();
           navigate('/');
         }
